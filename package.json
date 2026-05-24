@@ -1,0 +1,17 @@
+{
+  "name": "ampcode-cli-recreation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "amp": "./bin/amp.mjs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "start": "node ./bin/amp.mjs",
+    "amp": "node ./bin/amp.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

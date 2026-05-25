@@ -1,8 +1,16 @@
 import { runInteractive } from './repl.mjs';
 import { VERSION } from '../constants.mjs';
-import { slashHelpLines } from './interactive-core.mjs';
+import { handleInteractiveInput, slashHelpLines } from './interactive-core.mjs';
 
 const TABS = ['chat', 'tools', 'threads', 'config', 'help'];
+const PALETTE_ACTIONS = [
+  ['New thread', '/new'],
+  ['Continue latest thread', '/continue'],
+  ['Open help', '/help'],
+  ['List tools', '/tools list'],
+  ['List skills', '/skill: list'],
+  ['List plugins', '/plugins: list'],
+];
 
 export async function runTuiInteractive(parsed, initialInput = '') {
   return runInteractive(parsed, initialInput);
@@ -52,6 +60,43 @@ export function renderTuiFrame(model, size = {}) {
   return lines.slice(0, rows).join('\n');
 }
 
+export async function handleTuiKey(model, session, key) {
+  if (key?.name === 'tab') {
+    const index = TABS.indexOf(model.activeTab);
+    model.activeTab = TABS[(index + 1) % TABS.length];
+    return;
+  }
+  if (key?.ctrl && key.name === 'p') {
+    model.paletteOpen = true;
+    model.paletteIndex = 0;
+    return;
+  }
+  if (model.paletteOpen && key?.name === 'enter') {
+    const [, command] = PALETTE_ACTIONS[model.paletteIndex ?? 0] ?? PALETTE_ACTIONS[0];
+    model.paletteOpen = false;
+    await submitTuiText(model, session, command);
+    return;
+  }
+  if (key?.ctrl && key.name === 'n') {
+    await submitTuiText(model, session, '/new');
+    return;
+  }
+  if (key?.ctrl && key.name === 'r') {
+    await submitTuiText(model, session, '/reasoning next');
+    return;
+  }
+  if (key?.ctrl && key.name === 'm') {
+    const next = session.parsed.mode === 'smart' ? 'deep' : session.parsed.mode === 'deep' ? 'rush' : 'smart';
+    await submitTuiText(model, session, `/mode ${next}`);
+    return;
+  }
+  if (key?.name === 'enter') {
+    const text = model.composer.trim();
+    model.composer = '';
+    await submitTuiText(model, session, text);
+  }
+}
+
 function renderTranscript(model, limit, width) {
   if (model.activeTab === 'help') return slashHelpLines().slice(0, limit).map((line) => line.slice(0, width));
   if (model.activeTab !== 'chat') return [`${model.activeTab} panel`, 'Use slash commands or Ctrl-P palette actions.'];
@@ -73,4 +118,22 @@ function mergeColumns(leftLines, rightLines, width) {
     rows.push(`${left} | ${right}`);
   }
   return rows;
+}
+
+async function submitTuiText(model, session, text) {
+  if (!text) return;
+  model.transcript.push({ role: 'you', text });
+  model.status = 'running';
+  const result = await handleInteractiveInput(session, text);
+  model.mode = session.parsed.mode;
+  model.reasoningEffort = session.parsed.reasoningEffort ?? model.reasoningEffort;
+  model.threadId = session.thread?.id ?? 'new thread';
+  model.queueCount = session.queuedMessages.length;
+  if (result.lines.length > 0) {
+    model.transcript.push({
+      role: result.kind === 'error' ? 'error' : 'coven',
+      text: result.lines.join('\n'),
+    });
+  }
+  model.status = result.kind === 'exit' ? 'done' : 'idle';
 }

@@ -191,6 +191,34 @@ test('tui model renders panel layout with transcript tabs status rail and compos
   assert.match(frame, /> what is 2\+2\?/);
 });
 
+test('tui key handling cycles tabs and command palette actions reuse interactive commands', async () => {
+  const { createTuiModel, handleTuiKey } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'tui.mjs')));
+  const model = createTuiModel({ mode: 'smart', reasoningEffort: 'medium' });
+  const session = {
+    parsed: { mode: 'smart', reasoningEffort: 'medium' },
+    queuedMessages: [],
+    commandRunner: async () => {},
+    executeRunner: async () => undefined,
+    editorReader: async () => '',
+  };
+
+  await handleTuiKey(model, session, { name: 'tab' });
+  assert.equal(model.activeTab, 'tools');
+
+  await handleTuiKey(model, session, { ctrl: true, name: 'p' });
+  assert.equal(model.paletteOpen, true);
+
+  model.paletteIndex = 0;
+  await handleTuiKey(model, session, { name: 'enter' });
+  assert.equal(model.paletteOpen, false);
+  assert.equal(model.transcript.at(-1).text, 'new thread');
+
+  model.composer = '/mode deep';
+  await handleTuiKey(model, session, { name: 'enter' });
+  assert.equal(session.parsed.mode, 'deep');
+  assert.match(model.transcript.at(-1).text, /mode: deep/);
+});
+
 test('help lists documented noninteractive and config flags', () => {
   const result = runCovenCode(['--help']);
 

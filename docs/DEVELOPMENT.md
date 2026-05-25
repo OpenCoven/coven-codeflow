@@ -5,8 +5,9 @@
 - Node.js 20 or newer
 - npm for this package's current lockfile and scripts
 
-The runtime is dependency-free beyond Node built-ins. Keep it that way unless
-a dependency removes meaningful complexity and is worth the supply-chain cost.
+The runtime intentionally has a small dependency surface. `neo-blessed` owns the
+live panel TUI so Coven Code does not maintain a fragile raw escape-code input
+loop. Keep any future dependency additions similarly narrow and justified.
 
 ## Repository Layout
 
@@ -56,8 +57,8 @@ COVEN_CODE_SKIP_UPDATE_CHECK=1 \
 npm run coven-code -- -x "what is 2+2?"
 ```
 
-For interactive demos, bare `coven-code` opens the panel TUI. Use the classic
-readline surface only when the demo needs a plain prompt:
+For interactive demos, bare `coven-code` opens the `neo-blessed` panel TUI. Use
+the classic readline surface only when the demo needs a plain prompt:
 
 ```sh
 COVEN_CODE_REPL=1 \

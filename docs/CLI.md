@@ -30,9 +30,9 @@ Run with no arguments in a TTY:
 coven-code
 ```
 
-The default interactive surface is a full-screen panel TUI with a transcript,
-tabs, status rail, command palette, and composer. It keeps a current local
-thread and accepts slash commands:
+The default interactive surface is a full-screen `neo-blessed` panel TUI with a
+transcript, tabs, status rail, command palette, and composer. It keeps a current
+local thread and accepts slash commands:
 
 ```text
 Coven Code 0.0.0-recreate

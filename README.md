@@ -1,8 +1,8 @@
 # Coven Code
 
-A small, dependency-free Node CLI for local Coven Code workflows. It runs
-deterministic local command, thread, tool, MCP, skill, plugin, and SDK flows so
-integration behavior can be exercised end-to-end without a hosted service.
+A small Node CLI for local Coven Code workflows. It runs deterministic local
+command, thread, tool, MCP, skill, plugin, and SDK flows so integration behavior
+can be exercised end-to-end without a hosted service.
 
 ## Quickstart
 
@@ -26,7 +26,8 @@ The package exposes `coven-code` and `coven-code-sdk` bins.
 
 ## Interactive Mode
 
-Running `coven-code` with no arguments in a terminal starts the panel TUI.
+Running `coven-code` with no arguments in a terminal starts the `neo-blessed`
+panel TUI.
 
 ```text
 $ coven-code

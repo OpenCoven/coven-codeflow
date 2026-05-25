@@ -16,5 +16,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "neo-blessed": "0.2.0"
   }
 }

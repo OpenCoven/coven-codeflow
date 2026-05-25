@@ -208,7 +208,12 @@ test('tui key handling cycles tabs and command palette actions reuse interactive
   await handleTuiKey(model, session, { ctrl: true, name: 'p' });
   assert.equal(model.paletteOpen, true);
 
-  model.paletteIndex = 0;
+  await handleTuiKey(model, session, { name: 'down' });
+  assert.equal(model.paletteIndex, 1);
+
+  await handleTuiKey(model, session, { name: 'up' });
+  assert.equal(model.paletteIndex, 0);
+
   await handleTuiKey(model, session, { name: 'enter' });
   assert.equal(model.paletteOpen, false);
   assert.equal(model.transcript.at(-1).text, 'new thread');
@@ -235,6 +240,24 @@ test('tui scripted smoke processes input and exits without changing execute mode
   const execute = runCovenCode(['-x', 'what is 2+2?']);
   assert.equal(execute.status, 0, execute.stderr);
   assert.equal(execute.stdout.trim(), '4');
+});
+
+test('tui scripted prompt renders assistant output inside the transcript', () => {
+  const result = runCovenCode([], {
+    input: 'hello tui\n/exit\n',
+    env: {
+      COVEN_CODE_TUI_SCRIPTED: '1',
+      COVEN_CODE_REPL_HISTORY: '0',
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Coven Code/);
+  assert.match(result.stdout, /you:/);
+  assert.match(result.stdout, /hello tui/);
+  assert.match(result.stdout, /coven:/);
+  assert.match(result.stdout, /Coven Code local runtime received: hello tui/);
+  assert.doesNotMatch(result.stdout.trimStart(), /^Coven Code local runtime received:/);
 });
 
 test('help lists documented noninteractive and config flags', () => {

@@ -1,6 +1,5 @@
-import readline from 'node:readline';
 import { runInteractive } from './repl.mjs';
-import { VERSION } from '../constants.mjs';
+import { CLI_NAME, VERSION } from '../constants.mjs';
 import { createInteractiveSession, handleInteractiveInput, slashHelpLines } from './interactive-core.mjs';
 
 const TABS = ['chat', 'tools', 'threads', 'config', 'help'];
@@ -94,6 +93,18 @@ export async function handleTuiKey(model, session, key) {
     await submitTuiText(model, session, command);
     return;
   }
+  if (model.paletteOpen && key?.name === 'down') {
+    model.paletteIndex = (model.paletteIndex + 1) % PALETTE_ACTIONS.length;
+    return;
+  }
+  if (model.paletteOpen && key?.name === 'up') {
+    model.paletteIndex = (model.paletteIndex + PALETTE_ACTIONS.length - 1) % PALETTE_ACTIONS.length;
+    return;
+  }
+  if (model.paletteOpen && key?.name === 'escape') {
+    model.paletteOpen = false;
+    return;
+  }
   if (key?.ctrl && key.name === 'n') {
     await submitTuiText(model, session, '/new');
     return;
@@ -141,11 +152,17 @@ async function submitTuiText(model, session, text) {
   if (!text) return;
   model.transcript.push({ role: 'you', text });
   model.status = 'running';
-  const result = await handleInteractiveInput(session, text);
+  const { result, stdout, stderr } = await captureTerminalOutput(() => handleInteractiveInput(session, text));
   model.mode = session.parsed.mode;
   model.reasoningEffort = session.parsed.reasoningEffort ?? model.reasoningEffort;
   model.threadId = session.thread?.id ?? 'new thread';
   model.queueCount = session.queuedMessages.length;
+  if (stderr.trim()) {
+    model.transcript.push({ role: 'error', text: stderr.trim() });
+  }
+  if (stdout.trim()) {
+    model.transcript.push({ role: 'coven', text: stdout.trim() });
+  }
   if (result.lines.length > 0) {
     model.transcript.push({
       role: result.kind === 'error' ? 'error' : 'coven',
@@ -156,36 +173,229 @@ async function submitTuiText(model, session, text) {
 }
 
 async function runLiveTui(model, session) {
-  readline.emitKeypressEvents(process.stdin);
-  const wasRaw = process.stdin.isRaw;
-  process.stdin.setRawMode?.(true);
-  process.stdin.resume();
-  const redraw = () => {
-    process.stdout.write(`\x1b[2J\x1b[H${renderTuiFrame(model)}\n`);
-  };
-  redraw();
+  try {
+    const blessedModule = await import('neo-blessed');
+    return runBlessedTui(blessedModule.default ?? blessedModule, model, session);
+  } catch (error) {
+    console.error(`${CLI_NAME}: unable to start panel TUI, falling back to classic REPL: ${error?.message ?? error}`);
+    return runInteractive(session.parsed, '');
+  }
+}
+
+function runBlessedTui(blessed, model, session) {
   return new Promise((resolve) => {
+    const screen = blessed.screen({
+      smartCSR: true,
+      fullUnicode: true,
+      title: `${CLI_NAME} ${model.version}`,
+    });
+    const header = blessed.box({
+      top: 0,
+      left: 0,
+      width: '100%',
+      height: 3,
+      padding: { left: 1, right: 1 },
+      style: { fg: 'white', bg: 'black' },
+    });
+    const transcript = blessed.box({
+      top: 3,
+      left: 0,
+      width: '70%',
+      bottom: 3,
+      label: ' Chat ',
+      border: 'line',
+      scrollable: true,
+      alwaysScroll: true,
+      keys: true,
+      vi: true,
+      padding: { left: 1, right: 1 },
+      scrollbar: { ch: ' ', style: { bg: 'white' } },
+      style: {
+        border: { fg: 'cyan' },
+      },
+    });
+    const status = blessed.box({
+      top: 3,
+      right: 0,
+      width: '30%',
+      bottom: 3,
+      label: ' Status ',
+      border: 'line',
+      padding: { left: 1, right: 1 },
+      style: {
+        border: { fg: 'magenta' },
+      },
+    });
+    const composer = blessed.box({
+      bottom: 0,
+      left: 0,
+      width: '100%',
+      height: 3,
+      label: ' Prompt ',
+      border: 'line',
+      padding: { left: 1, right: 1 },
+      style: {
+        border: { fg: 'green' },
+      },
+    });
+    const palette = blessed.list({
+      top: 'center',
+      left: 'center',
+      width: '60%',
+      height: Math.min(12, PALETTE_ACTIONS.length + 2),
+      label: ' Command Palette ',
+      border: 'line',
+      hidden: true,
+      keys: true,
+      mouse: true,
+      items: PALETTE_ACTIONS.map(([label, command]) => `${label}  ${command}`),
+      style: {
+        border: { fg: 'yellow' },
+        selected: { bg: 'blue', fg: 'white' },
+      },
+    });
+
+    screen.append(header);
+    screen.append(transcript);
+    screen.append(status);
+    screen.append(composer);
+    screen.append(palette);
+    screen.program.hideCursor();
+
+    let settled = false;
     const cleanup = () => {
-      process.stdin.off('keypress', onKeypress);
-      process.stdin.setRawMode?.(Boolean(wasRaw));
-      process.stdout.write('\x1b[?25h');
+      if (settled) return;
+      settled = true;
+      screen.program.showCursor();
+      screen.destroy();
       resolve();
     };
-    const onKeypress = async (chunk, key = {}) => {
+    const sync = () => {
+      header.setContent(`${CLI_NAME} ${model.version}\n${renderTabLine(model)}`);
+      transcript.setContent(renderTranscriptText(model));
+      status.setContent(renderStatusText(model));
+      composer.setContent(`> ${model.composer}`);
+      if (model.paletteOpen) {
+        palette.show();
+        palette.select(model.paletteIndex);
+        palette.focus();
+      } else {
+        palette.hide();
+      }
+      screen.render();
+    };
+    const dispatchKey = async (key) => {
+      await handleTuiKey(model, session, normalizeBlessedKey(key));
+      sync();
+      if (model.status === 'done') cleanup();
+    };
+
+    screen.on('keypress', async (chunk, key = {}) => {
+      if (settled) return;
       if (key.ctrl && key.name === 'c') {
         cleanup();
         return;
       }
-      if (key.name === 'backspace') {
+      if (key.name === 'backspace' || key.name === 'delete') {
         model.composer = model.composer.slice(0, -1);
-      } else if (chunk && !key.ctrl && !key.meta && key.name !== 'return' && key.name !== 'enter' && key.name !== 'tab') {
-        model.composer += chunk;
-      } else {
-        await handleTuiKey(model, session, key.name === 'return' ? { ...key, name: 'enter' } : key);
+        sync();
+        return;
       }
-      redraw();
-      if (model.status === 'done') cleanup();
-    };
-    process.stdin.on('keypress', onKeypress);
+      if (isPrintableChunk(chunk, key)) {
+        model.composer += chunk;
+        sync();
+        return;
+      }
+      await dispatchKey(key);
+    });
+
+    sync();
   });
+}
+
+function renderTabLine(model) {
+  return TABS.map((tab) => tab === model.activeTab ? `[${tab}]` : ` ${tab} `).join(' ');
+}
+
+function renderTranscriptText(model) {
+  if (model.activeTab === 'help') return slashHelpLines().join('\n');
+  if (model.activeTab !== 'chat') return `${model.activeTab} panel\nUse slash commands or Ctrl-P palette actions.`;
+  if (model.transcript.length === 0) return 'Ready. Type a prompt or /help.';
+  return model.transcript
+    .map((entry) => `${entry.role}:\n${entry.text}`)
+    .join('\n\n');
+}
+
+function renderStatusText(model) {
+  return [
+    `thread: ${model.threadId}`,
+    `mode: ${model.mode}`,
+    `reasoning: ${model.reasoningEffort}`,
+    `queued: ${model.queueCount}`,
+    `tools: ${model.toolCount}`,
+    `active: ${model.activeTab}`,
+    `status: ${model.status}`,
+    '',
+    'Keys',
+    'Tab: next panel',
+    'Ctrl-P: palette',
+    'Ctrl-N: new thread',
+    'Ctrl-R: reasoning',
+    'Ctrl-M: mode',
+    'Ctrl-C: quit',
+  ].join('\n');
+}
+
+function normalizeBlessedKey(key = {}) {
+  if (key.name === 'return') return { ...key, name: 'enter' };
+  return key;
+}
+
+function isPrintableChunk(chunk, key = {}) {
+  return typeof chunk === 'string'
+    && chunk.length > 0
+    && !key.ctrl
+    && !key.meta
+    && key.name !== 'return'
+    && key.name !== 'enter'
+    && key.name !== 'tab'
+    && key.name !== 'escape'
+    && key.name !== 'up'
+    && key.name !== 'down'
+    && key.name !== 'left'
+    && key.name !== 'right';
+}
+
+async function captureTerminalOutput(fn) {
+  let stdout = '';
+  let stderr = '';
+  const originalStdoutWrite = process.stdout.write;
+  const originalStderrWrite = process.stderr.write;
+  process.stdout.write = function tuiStdoutWrite(chunk, encoding, callback) {
+    stdout += normalizeWriteChunk(chunk, encoding);
+    callWriteCallback(encoding, callback);
+    return true;
+  };
+  process.stderr.write = function tuiStderrWrite(chunk, encoding, callback) {
+    stderr += normalizeWriteChunk(chunk, encoding);
+    callWriteCallback(encoding, callback);
+    return true;
+  };
+  try {
+    const result = await fn();
+    return { result, stdout, stderr };
+  } finally {
+    process.stdout.write = originalStdoutWrite;
+    process.stderr.write = originalStderrWrite;
+  }
+}
+
+function normalizeWriteChunk(chunk, encoding) {
+  if (Buffer.isBuffer(chunk)) return chunk.toString(typeof encoding === 'string' ? encoding : 'utf8');
+  return String(chunk);
+}
+
+function callWriteCallback(encoding, callback) {
+  if (typeof encoding === 'function') encoding();
+  else if (typeof callback === 'function') callback();
 }

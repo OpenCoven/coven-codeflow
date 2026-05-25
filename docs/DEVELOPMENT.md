@@ -14,7 +14,7 @@ a dependency removes meaningful complexity and is worth the supply-chain cost.
 bin/                    CLI entrypoints
 docs/                   User-facing documentation
 src/agent/              Local deterministic agent behavior
-src/cli/                Argument parsing, REPL, references, stream helpers
+src/cli/                Argument parsing, TUI/REPL, references, stream helpers
 src/commands/           Top-level command implementations
 src/mcp/                MCP discovery, permissions, probing, registry checks
 src/plugins/            Project/user plugin discovery and lifecycle
@@ -56,12 +56,27 @@ COVEN_CODE_SKIP_UPDATE_CHECK=1 \
 npm run coven-code -- -x "what is 2+2?"
 ```
 
+For interactive demos, bare `coven-code` opens the panel TUI. Use the classic
+readline surface only when the demo needs a plain prompt:
+
+```sh
+COVEN_CODE_REPL=1 \
+COVEN_CODE_REPL_HISTORY=0 \
+COVEN_CODE_SKIP_UPDATE_CHECK=1 \
+npm run coven-code
+```
+
+`COVEN_CODE_TUI_SCRIPTED=1` is reserved for deterministic TUI tests and
+automation. It feeds newline-separated input through the TUI loop without
+changing execute mode, stream JSON, stdin piping, or subcommand behavior.
+
 ## Testing Expectations
 
-Add or update tests in `test/cli.test.mjs` for any CLI behavior change.
-Prefer deterministic local tests over network calls. When a feature integrates
-with MCP, plugins, skills, or toolbox tools, test both discovery and execution
-paths.
+Add or update tests in `test/cli.test.mjs` for any CLI behavior change. TUI
+changes should cover the model/renderer, key handling, scripted smoke path, and
+classic REPL compatibility when needed. Prefer deterministic local tests over
+network calls. When a feature integrates with MCP, plugins, skills, or toolbox
+tools, test both discovery and execution paths.
 
 ## Safety
 

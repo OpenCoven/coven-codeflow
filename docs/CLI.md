@@ -30,19 +30,25 @@ Run with no arguments in a TTY:
 coven-code
 ```
 
-Interactive mode keeps a current local thread and accepts slash commands:
+The default interactive surface is a full-screen panel TUI with a transcript,
+tabs, status rail, command palette, and composer. It keeps a current local
+thread and accepts slash commands:
 
 ```text
-> what is 2+2?
-4
+Coven Code 0.0.0-recreate
+chat tools threads config help
+--------------------------------------------------------------------------------
+Ready. Type a prompt or /help.                         | thread: new thread
+                                                        | mode: smart
+                                                        | reasoning: high
+--------------------------------------------------------------------------------
 > /help
-> /tools list
-> /threads list
-> /exit
 ```
 
 Supported interactive behaviors include:
 
+- panel tabs for chat, tools, threads, config, and help
+- command palette actions for common thread and tool workflows
 - persistent line history
 - `/new` to start a fresh thread
 - `/continue` to resume a thread
@@ -53,11 +59,21 @@ Supported interactive behaviors include:
   inspection
 - multiline prompts with trailing backslash continuation
 
-Disable REPL history for demos or tests:
+Use the classic readline REPL explicitly when a plain prompt is better for
+scripts, demos, or compatibility:
+
+```sh
+COVEN_CODE_REPL=1 coven-code
+```
+
+Disable classic REPL history for demos or tests:
 
 ```sh
 COVEN_CODE_REPL_HISTORY=0 coven-code
 ```
+
+`COVEN_CODE_TUI_SCRIPTED=1` is a deterministic test and automation hook for
+feeding newline-separated TUI input. It is not intended as a normal user mode.
 
 ## Execute Mode
 
@@ -75,6 +91,10 @@ Piped stdin is combined with the prompt:
 echo "list markdown files" | coven-code
 echo "additional context" | coven-code -x "answer using this context"
 ```
+
+`-x`, `--stream-json`, `--stream-json-input`, stdin piping, and subcommands
+keep their existing noninteractive behavior; the panel TUI only changes the
+bare no-argument TTY path.
 
 ## File, Image, Glob, and Thread References
 

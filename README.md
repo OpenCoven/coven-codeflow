@@ -26,19 +26,32 @@ The package exposes `coven-code` and `coven-code-sdk` bins.
 
 ## Interactive Mode
 
-Running `coven-code` with no arguments in a terminal starts the REPL.
+Running `coven-code` with no arguments in a terminal starts the panel TUI.
 
 ```text
 $ coven-code
-coven-code 0.0.0-recreate — interactive mode. Type /exit or press Ctrl-D to quit, /help for slash commands.
-> what is 2+2?
-4
-> /tools list
+Coven Code 0.0.0-recreate
+chat tools threads config help
+--------------------------------------------------------------------------------
+Ready. Type a prompt or /help.                         | thread: new thread
+                                                        | mode: smart
+                                                        | reasoning: high
+--------------------------------------------------------------------------------
+>
+```
+
+The classic readline REPL remains available for scripts, demos, and compatibility:
+
+```sh
+COVEN_CODE_REPL=1 coven-code
 ```
 
 Line history is stored at `${XDG_CONFIG_HOME:-~/.config}/coven-code/repl_history`.
 Use `COVEN_CODE_REPL_HISTORY_FILE` to override the path or
-`COVEN_CODE_REPL_HISTORY=0` to disable history.
+`COVEN_CODE_REPL_HISTORY=0` to disable history in the classic REPL.
+
+`COVEN_CODE_TUI_SCRIPTED=1` is reserved for deterministic tests and automation
+that need to drive the TUI with newline-separated input.
 
 ## Execute Mode
 
@@ -80,7 +93,8 @@ Useful settings and env vars:
 Core:
 
 - `coven-code --help`, `coven-code --version`
-- interactive REPL with `/new`, `/continue`, `/queue`, `/mode`, `/reasoning`, persistent history, and multiline prompts
+- panel TUI with transcript, tabs, status rail, composer, keyboard shortcuts, and command palette
+- compatibility REPL with `/new`, `/continue`, `/queue`, `/mode`, `/reasoning`, persistent history, and multiline prompts
 - command-palette aliases for thread archive, visibility, diagnostics, IDE, skills, plugins, and help
 - one-shot execute mode with `-x` / `--execute`
 - `@file`, glob, image, explicit thread, and `@@query` thread-search references

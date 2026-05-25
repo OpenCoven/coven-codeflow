@@ -5,9 +5,10 @@ export function printHelp() {
 
 Usage: ${CLI_NAME} [options] [command]
 
-Run with no arguments in a terminal to enter the interactive REPL. Piped stdin
-becomes the first interactive message when stdout is a TTY. Pass --execute or
-redirect stdout to run a single turn and exit.
+Run with no arguments in a terminal to enter the panel TUI. Set
+COVEN_CODE_REPL=1 to use the classic readline REPL. Piped stdin becomes the
+first interactive message when stdout is a TTY. Pass --execute or redirect
+stdout to run a single turn and exit.
 
 Options:
       --execute, -x [prompt]   Run one agent turn, print the final answer, and exit

@@ -219,6 +219,24 @@ test('tui key handling cycles tabs and command palette actions reuse interactive
   assert.match(model.transcript.at(-1).text, /mode: deep/);
 });
 
+test('tui scripted smoke processes input and exits without changing execute mode', () => {
+  const result = runCovenCode([], {
+    input: '/mode deep\n/exit\n',
+    env: {
+      COVEN_CODE_TUI_SCRIPTED: '1',
+      COVEN_CODE_REPL_HISTORY: '0',
+    },
+  });
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Coven Code/);
+  assert.match(result.stdout, /mode: deep/);
+
+  const execute = runCovenCode(['-x', 'what is 2+2?']);
+  assert.equal(execute.status, 0, execute.stderr);
+  assert.equal(execute.stdout.trim(), '4');
+});
+
 test('help lists documented noninteractive and config flags', () => {
   const result = runCovenCode(['--help']);
 
@@ -8042,7 +8060,7 @@ test(
     const script = [
       'log_user 1',
       'set timeout 10',
-      `spawn -noecho sh -c {printf 'what is 2+2?\\n' | ${process.execPath} ${covenCodeBin}}`,
+      `spawn -noecho sh -c {printf 'what is 2+2?\\n' | COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}}`,
       'expect {',
       '  -re "interactive mode" { }',
       '  eof { puts "EOF before interactive banner"; exit 2 }',
@@ -8075,7 +8093,7 @@ test(
       'log_user 1',
       'set timeout 10',
       'set env(HIDDEN_SHELL_OUTPUT) "hidden-live-shell"',
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "what is 2+2?\\r"',
@@ -8112,7 +8130,7 @@ test(
     const script = [
       'log_user 1',
       'set timeout 10',
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "/coven-code: help\\r"',
@@ -8166,7 +8184,7 @@ test(
     const script = [
       'log_user 1',
       'set timeout 10',
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "/ide connect\\r"',
@@ -8201,7 +8219,7 @@ test(
       'set timeout 10',
       `set env(HOME) "${home}"`,
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "/skill: list\\r"',
@@ -8237,7 +8255,7 @@ test(
       `set env(HOME) "${home}"`,
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "/plugins: reload\\r"',
@@ -8285,7 +8303,7 @@ export default function (covenCode) {
       `set env(HOME) "${home}"`,
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "/open-plugin-docs\\r"',
@@ -8321,7 +8339,7 @@ test(
       `set env(HOME) "${home}"`,
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "the migration codename is quartz-river\\r"',
@@ -8359,7 +8377,7 @@ test(
       `set env(HOME) "${home}"`,
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "the migration codename is quartz-river\\r"',
@@ -8421,7 +8439,7 @@ test(
       `set env(HOME) "${home}"`,
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "the archive target is current-thread\\r"',
@@ -8465,7 +8483,7 @@ test(
       `set env(HOME) "${home}"`,
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "the visibility target is current-thread\\r"',
@@ -8511,7 +8529,7 @@ test(
       `set env(HOME) "${home}"`,
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "the feedback target is current-thread\\r"',
@@ -8559,7 +8577,7 @@ test(
       `set env(HOME) "${home}"`,
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "/mode rush\\r"',
@@ -8600,7 +8618,7 @@ test(
       `set env(HOME) "${home}"`,
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "/reasoning xhigh\\r"',
@@ -8645,7 +8663,7 @@ writeFileSync(process.argv[2], 'what is 2+2?\\n');
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `set env(EDITOR) "${process.execPath} ${editorScript}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "/editor\\r"',
@@ -8693,7 +8711,7 @@ writeFileSync(process.argv[2], 'the migration codename is amber-lake\\n');
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `set env(EDITOR) "${process.execPath} ${editorScript}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "the migration codename is quartz-river\\r"',
@@ -8743,7 +8761,7 @@ test(
       `set env(HOME) "${home}"`,
       `set env(XDG_CONFIG_HOME) "${xdg}"`,
       `cd "${cwd}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "/queue now add 8 to that\\r"',
@@ -8781,7 +8799,7 @@ test(
       'log_user 1',
       'set timeout 10',
       'set env(HIDDEN_SHELL_OUTPUT) "hidden-live-shell"',
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "/tools list\\r"',
@@ -8816,7 +8834,7 @@ test(
     const script = [
       'log_user 1',
       'set timeout 10',
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       `send -- "/\\"two words\\" three\\r"`,
@@ -8858,7 +8876,7 @@ test(
       'log_user 1',
       'set timeout 10',
       `set env(COVEN_CODE_REPL_HISTORY_FILE) "${historyPath}"`,
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       // Up-arrow recalls the seeded line, Enter submits it.
@@ -8903,7 +8921,7 @@ test(
     const script = [
       'log_user 1',
       'set timeout 10',
-      `spawn -noecho ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       // First line ends with a single backslash → continuation expected.

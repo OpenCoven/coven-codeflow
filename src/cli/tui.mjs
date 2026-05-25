@@ -1,6 +1,7 @@
+import readline from 'node:readline';
 import { runInteractive } from './repl.mjs';
 import { VERSION } from '../constants.mjs';
-import { handleInteractiveInput, slashHelpLines } from './interactive-core.mjs';
+import { createInteractiveSession, handleInteractiveInput, slashHelpLines } from './interactive-core.mjs';
 
 const TABS = ['chat', 'tools', 'threads', 'config', 'help'];
 const PALETTE_ACTIONS = [
@@ -13,7 +14,23 @@ const PALETTE_ACTIONS = [
 ];
 
 export async function runTuiInteractive(parsed, initialInput = '') {
-  return runInteractive(parsed, initialInput);
+  const session = createInteractiveSession(parsed);
+  const model = createTuiModel({
+    mode: parsed.mode,
+    reasoningEffort: parsed.reasoningEffort,
+  });
+  if (process.env.COVEN_CODE_TUI_SCRIPTED === '1') {
+    for (const line of initialInput.split(/\r?\n/)) {
+      const text = line.trim();
+      if (!text) continue;
+      await submitTuiText(model, session, text);
+      if (model.status === 'done') break;
+    }
+    console.log(renderTuiFrame(model, { columns: process.stdout.columns ?? 80, rows: process.stdout.rows ?? 24 }));
+    return;
+  }
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return runInteractive(parsed, initialInput);
+  return runLiveTui(model, session);
 }
 
 export function createTuiModel(options = {}) {
@@ -136,4 +153,39 @@ async function submitTuiText(model, session, text) {
     });
   }
   model.status = result.kind === 'exit' ? 'done' : 'idle';
+}
+
+async function runLiveTui(model, session) {
+  readline.emitKeypressEvents(process.stdin);
+  const wasRaw = process.stdin.isRaw;
+  process.stdin.setRawMode?.(true);
+  process.stdin.resume();
+  const redraw = () => {
+    process.stdout.write(`\x1b[2J\x1b[H${renderTuiFrame(model)}\n`);
+  };
+  redraw();
+  return new Promise((resolve) => {
+    const cleanup = () => {
+      process.stdin.off('keypress', onKeypress);
+      process.stdin.setRawMode?.(Boolean(wasRaw));
+      process.stdout.write('\x1b[?25h');
+      resolve();
+    };
+    const onKeypress = async (chunk, key = {}) => {
+      if (key.ctrl && key.name === 'c') {
+        cleanup();
+        return;
+      }
+      if (key.name === 'backspace') {
+        model.composer = model.composer.slice(0, -1);
+      } else if (chunk && !key.ctrl && !key.meta && key.name !== 'return' && key.name !== 'enter' && key.name !== 'tab') {
+        model.composer += chunk;
+      } else {
+        await handleTuiKey(model, session, key.name === 'return' ? { ...key, name: 'enter' } : key);
+      }
+      redraw();
+      if (model.status === 'done') cleanup();
+    };
+    process.stdin.on('keypress', onKeypress);
+  });
 }

@@ -52,12 +52,12 @@ export async function main() {
   }
   parsed.reasoningEffort = reasoningEffortForMode(parsed.mode, parsed.reasoningEffort);
 
-  if (parsed.execute || (stdin.length > 0 && !process.stdout.isTTY)) {
+  if (parsed.execute || (stdin.length > 0 && !process.stdout.isTTY && process.env.COVEN_CODE_TUI_SCRIPTED !== '1')) {
     await runExecute(parsed, stdin, { thread: continuationThread(parsed) });
     return;
   }
 
-  if (process.stdout.isTTY && (process.stdin.isTTY || stdin.length > 0)) {
+  if (process.env.COVEN_CODE_TUI_SCRIPTED === '1' || (process.stdout.isTTY && (process.stdin.isTTY || stdin.length > 0))) {
     const runner = selectInteractiveRunner({
       stdinIsTTY: Boolean(process.stdin.isTTY),
       stdoutIsTTY: Boolean(process.stdout.isTTY),
@@ -72,6 +72,7 @@ export async function main() {
 }
 
 export function selectInteractiveRunner({ stdinIsTTY, stdoutIsTTY, env }) {
+  if (env.COVEN_CODE_TUI_SCRIPTED === '1') return 'tui';
   if (env.COVEN_CODE_REPL === '1') return 'repl';
   if (stdinIsTTY && stdoutIsTTY) return 'tui';
   return 'repl';

@@ -145,6 +145,28 @@ test('interactive core handles mode, reasoning, queue, and new thread slash comm
   assert.equal(session.thread, undefined);
 });
 
+test('interactive routing chooses tui by default for tty sessions and repl when requested', async () => {
+  const { selectInteractiveRunner } = await import(pathToFileURL(path.join(repoRoot, 'src', 'main.mjs')));
+
+  assert.equal(selectInteractiveRunner({
+    stdinIsTTY: true,
+    stdoutIsTTY: true,
+    env: {},
+  }), 'tui');
+
+  assert.equal(selectInteractiveRunner({
+    stdinIsTTY: true,
+    stdoutIsTTY: true,
+    env: { COVEN_CODE_REPL: '1' },
+  }), 'repl');
+
+  assert.equal(selectInteractiveRunner({
+    stdinIsTTY: false,
+    stdoutIsTTY: true,
+    env: {},
+  }), 'repl');
+});
+
 test('help lists documented noninteractive and config flags', () => {
   const result = runCovenCode(['--help']);
 

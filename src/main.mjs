@@ -3,6 +3,7 @@ import { printHelp } from './cli/help.mjs';
 import { runCommand } from './cli/dispatch.mjs';
 import { runExecute } from './cli/execute.mjs';
 import { runInteractive } from './cli/repl.mjs';
+import { runTuiInteractive } from './cli/tui.mjs';
 import { runIdeConnect } from './commands/ide.mjs';
 import { readStdin } from './util/shell.mjs';
 import { AGENT_MODES, VERSION } from './constants.mjs';
@@ -57,11 +58,23 @@ export async function main() {
   }
 
   if (process.stdout.isTTY && (process.stdin.isTTY || stdin.length > 0)) {
-    await runInteractive(parsed, stdin);
+    const runner = selectInteractiveRunner({
+      stdinIsTTY: Boolean(process.stdin.isTTY),
+      stdoutIsTTY: Boolean(process.stdout.isTTY),
+      env: process.env,
+    });
+    if (runner === 'tui') await runTuiInteractive(parsed, stdin);
+    else await runInteractive(parsed, stdin);
     return;
   }
 
   printHelp();
+}
+
+export function selectInteractiveRunner({ stdinIsTTY, stdoutIsTTY, env }) {
+  if (env.COVEN_CODE_REPL === '1') return 'repl';
+  if (stdinIsTTY && stdoutIsTTY) return 'tui';
+  return 'repl';
 }
 
 function continuationThread(parsed) {

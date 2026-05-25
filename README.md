@@ -16,6 +16,14 @@ echo "list markdown files" | npm run coven-code
 
 The package exposes `coven-code` and `coven-code-sdk` bins.
 
+## Documentation
+
+- [CLI reference](docs/CLI.md) - commands, flags, interactive mode, execute mode, JSON streaming, and thread workflows
+- [Configuration](docs/CONFIGURATION.md) - settings files, environment variables, precedence, and common examples
+- [MCP, skills, and plugins](docs/MCP-SKILLS-PLUGINS.md) - extension points for tools, MCP servers, skills, and project plugins
+- [SDK](docs/SDK.md) - package exports, install helper, execution API, permissions, and thread helpers
+- [Development](docs/DEVELOPMENT.md) - repository layout, local checks, release notes, and safety expectations
+
 ## Interactive Mode
 
 Running `coven-code` with no arguments in a terminal starts the REPL.
@@ -100,6 +108,21 @@ MCP, skills, and plugins:
 SDK:
 
 - `coven-code-sdk install [--force]`
-- package root exports `execute`, `createUserMessage`, and `createPermission`
+- package root exports `execute`, `createUserMessage`, `createPermission`, and `threads`
 - SDK execution streams local `coven-code --stream-json` messages
 - SDK options map to CLI args for cwd, env, mode, reasoning effort, thinking, labels, visibility, archive, continuation, settings, toolbox, skills, MCP config, permissions, enabled tools, system prompt, logging, and permission bypass
+
+## Development Checks
+
+Run the full local verification gate before committing or publishing:
+
+```sh
+git diff --check
+node ./bin/coven-code.mjs --help
+node ./bin/coven-code.mjs -x "what is 2+2?"
+npm test
+```
+
+The project is intentionally dependency-free at runtime. Keep new behavior
+covered in `test/cli.test.mjs`, avoid hosted-service assumptions, and keep
+examples deterministic.

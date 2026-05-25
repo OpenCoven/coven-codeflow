@@ -167,6 +167,30 @@ test('interactive routing chooses tui by default for tty sessions and repl when 
   }), 'repl');
 });
 
+test('tui model renders panel layout with transcript tabs status rail and composer', async () => {
+  const { createTuiModel, renderTuiFrame } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'tui.mjs')));
+
+  const model = createTuiModel({
+    version: '0.0.0-test',
+    mode: 'smart',
+    reasoningEffort: 'medium',
+    threadId: 'T-test',
+    toolCount: 18,
+  });
+  model.transcript.push({ role: 'you', text: 'hello' });
+  model.composer = 'what is 2+2?';
+
+  const frame = renderTuiFrame(model, { columns: 82, rows: 24, color: false });
+
+  assert.match(frame, /Coven Code 0\.0\.0-test/);
+  assert.match(frame, /chat\s+tools\s+threads\s+config\s+help/);
+  assert.match(frame, /you/);
+  assert.match(frame, /hello/);
+  assert.match(frame, /thread: T-test/);
+  assert.match(frame, /mode: smart/);
+  assert.match(frame, /> what is 2\+2\?/);
+});
+
 test('help lists documented noninteractive and config flags', () => {
   const result = runCovenCode(['--help']);
 

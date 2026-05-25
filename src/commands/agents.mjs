@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { CONFIG_SUBDIR } from '../constants.mjs';
 import { configDir } from '../settings/paths.mjs';
-import { addIfExists } from '../util/fs.mjs';
 import { UsageError } from '../cli/parse.mjs';
 
 export async function runAgents(args) {
@@ -14,10 +14,14 @@ export async function runAgents(args) {
 
 export function discoverAgentFiles(cwd) {
   const files = [];
-  addIfExists(files, path.join(configDir(), 'amp', 'AGENTS.md'));
-  addIfExists(files, path.join(configDir(), 'AGENTS.md'));
-  addIfExists(files, '/etc/ampcode/AGENTS.md');
-  addIfExists(files, '/Library/Application Support/ampcode/AGENTS.md');
+  addFirstGuidanceInDir(files, path.join(configDir(), CONFIG_SUBDIR));
+  addFirstGuidanceInDir(files, configDir());
+  addFirstGuidanceInDir(files, path.join(os.homedir(), '.config', CONFIG_SUBDIR));
+  addFirstGuidanceInDir(files, path.join(os.homedir(), '.config'));
+  addFirstGuidanceInDir(files, '/etc/coven-code');
+  addFirstGuidanceInDir(files, '/Library/Application Support/coven-code');
+  if (process.env.ProgramData) addFirstGuidanceInDir(files, path.join(process.env.ProgramData, CONFIG_SUBDIR));
+  if (process.env.PROGRAMDATA) addFirstGuidanceInDir(files, path.join(process.env.PROGRAMDATA, CONFIG_SUBDIR));
 
   const home = os.homedir();
   let current = path.resolve(cwd);

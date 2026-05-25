@@ -1,15 +1,18 @@
 {
-  "name": "ampcode-cli-recreation",
+  "name": "@opencoven/coven-code",
   "version": "0.0.0",
-  "private": true,
   "type": "module",
+  "exports": {
+    ".": "./src/sdk.mjs"
+  },
   "bin": {
-    "amp": "./bin/amp.mjs"
+    "coven-code": "./bin/coven-code.mjs",
+    "coven-code-sdk": "./bin/coven-code-sdk.mjs"
   },
   "scripts": {
     "test": "node --test",
-    "start": "node ./bin/amp.mjs",
-    "amp": "node ./bin/amp.mjs"
+    "start": "node ./bin/coven-code.mjs",
+    "coven-code": "node ./bin/coven-code.mjs"
   },
   "engines": {
     "node": ">=20"

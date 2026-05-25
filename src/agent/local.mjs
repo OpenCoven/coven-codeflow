@@ -5,8 +5,8 @@ export function localAgentResponse(prompt, stdin) {
   const text = prompt.trim();
   const lower = text.toLowerCase();
 
-  if (lower.includes('now add') && lower.includes('to that') && lower.includes('[thread:')) {
-    const addend = Number(lower.match(/now add\s+(\d+)\s+to that/)?.[1] ?? 0);
+  if (lower.includes('now add') && lower.includes('to that')) {
+    const addend = Number([...lower.matchAll(/now add\s+(\d+)\s+to that/g)].at(-1)?.[1] ?? 0);
     const prior = Number([...text.matchAll(/^assistant:\s*(\d+)\s*$/gim)].at(-1)?.[1] ?? 0);
     if (addend && prior) return String(prior + addend);
   }
@@ -45,12 +45,16 @@ export function localAgentResponse(prompt, stdin) {
     return matches[0] || 'No codename was found in the referenced file.';
   }
   if (lower.includes('codename')) {
+    const match = text.match(/codename:\s*([a-z0-9_-]+)/i);
+    if (match) return match[1];
+  }
+  if (lower.includes('codename')) {
     return 'No codename was found.';
   }
   if (stdin.trim()) {
     return `Received ${stdin.trim().split(/\s+/).length} input words and prompt: ${parsedSummary(text)}`;
   }
-  return `Amp local recreation received: ${parsedSummary(text)}`;
+  return `Coven Code local runtime received: ${parsedSummary(text)}`;
 }
 
 export function detectPackageManager() {

@@ -11,8 +11,15 @@ export function parseGlobalArgs(args) {
     help: false,
     version: false,
     mode: 'smart',
+    reasoningEffort: undefined,
     mcpConfig: undefined,
     settingsFile: undefined,
+    labels: [],
+    visibility: undefined,
+    archive: false,
+    continueThread: false,
+    toolbox: undefined,
+    skills: undefined,
     ide: undefined,
     positionals: [],
   };
@@ -40,8 +47,33 @@ export function parseGlobalArgs(args) {
     } else if (arg === '--settings-file') {
       parsed.settingsFile = args[index + 1] ?? '';
       index += 1;
+    } else if (arg === '--label') {
+      parsed.labels.push(args[index + 1] ?? '');
+      index += 1;
+    } else if (arg === '--visibility') {
+      parsed.visibility = args[index + 1] ?? '';
+      index += 1;
+    } else if (arg === '--archive') {
+      parsed.archive = true;
+    } else if (arg === '--continue') {
+      const next = args[index + 1];
+      if (next && /^T-[A-Za-z0-9-]+$/.test(next)) {
+        parsed.continueThread = next;
+        index += 1;
+      } else {
+        parsed.continueThread = true;
+      }
+    } else if (arg === '--toolbox') {
+      parsed.toolbox = args[index + 1] ?? '';
+      index += 1;
+    } else if (arg === '--skills') {
+      parsed.skills = args[index + 1] ?? '';
+      index += 1;
     } else if (arg === '--mode') {
       parsed.mode = args[index + 1] ?? parsed.mode;
+      index += 1;
+    } else if (arg === '--reasoning-effort') {
+      parsed.reasoningEffort = args[index + 1] ?? '';
       index += 1;
     } else if (arg === '--jetbrains') parsed.ide = 'jetbrains';
     else parsed.positionals.push(arg);

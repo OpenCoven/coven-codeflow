@@ -3,6 +3,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { findManagedSettingsFile, findWorkspaceSettingsFile, settingsFile } from './paths.mjs';
 
+export const SETTINGS_PREFIX = 'covenCode.';
+
 export function readSettings(parsed = {}) {
   return readSettingsFile(settingsFile(parsed));
 }

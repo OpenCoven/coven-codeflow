@@ -7,10 +7,10 @@ import { toolsDirs } from '../settings/paths.mjs';
 import { readEffectiveSettings } from '../settings/load.mjs';
 import { globMatch } from '../util/glob.mjs';
 
-export function listToolboxTools() {
+export function listToolboxTools(parsed = {}) {
   const seen = new Set();
   const tools = [];
-  for (const dir of toolsDirs()) {
+  for (const dir of toolsDirs(parsed)) {
     if (!existsSync(dir)) continue;
     for (const entry of readdirSync(dir)) {
       const filePath = path.join(dir, entry);
@@ -26,7 +26,12 @@ export function listToolboxTools() {
 }
 
 export function isToolDisabled(name, kind, parsed = {}) {
-  const disabled = readEffectiveSettings(parsed)['amp.tools.disable'];
+  const settings = readEffectiveSettings(parsed);
+  const enabled = settings['covenCode.tools.enable'];
+  if (Array.isArray(enabled) && !enabled.some((pattern) => typeof pattern === 'string' && globMatch(pattern, name))) {
+    return true;
+  }
+  const disabled = settings['covenCode.tools.disable'];
   if (!Array.isArray(disabled)) return false;
   return disabled.some((pattern) => {
     if (typeof pattern !== 'string') return false;
@@ -46,7 +51,7 @@ export function toolKindForName(name) {
 
 function describeToolboxTool(filePath) {
   const result = spawnSync(filePath, {
-    env: { ...process.env, TOOLBOX_ACTION: 'describe', AGENT: 'amp' },
+    env: { ...process.env, TOOLBOX_ACTION: 'describe', AGENT: 'coven-code' },
     encoding: 'utf8',
     shell: false,
   });
@@ -59,7 +64,7 @@ function parseToolboxDescription(stdout, filePath) {
     return {
       format: 'json',
       description: parsed.description || `Toolbox tool at ${filePath}`,
-      input: normalizeToolboxInputSchema(parsed.input ?? parsed.inputSchema ?? parsed.schema),
+      input: normalizeToolboxInputSchema(parsed.input ?? parsed.args ?? parsed.inputSchema ?? parsed.schema),
       raw: parsed,
     };
   } catch {
@@ -68,14 +73,14 @@ function parseToolboxDescription(stdout, filePath) {
 
   const lines = stdout.split(/\r?\n/).filter(Boolean);
   const description = lines
-    .find((line) => line.startsWith('description: '))
-    ?.replace('description: ', '')
-    .trim();
+    .filter((line) => line.startsWith('description: '))
+    .map((line) => line.replace('description: ', '').trim())
+    .join('\n');
   const input = lines
     .filter((line) => !line.startsWith('name: ') && !line.startsWith('description: '))
     .map((line) => {
-      const match = line.match(/^([^:]+):\s+(\S+)(?:\s+(.*))?$/);
-      return match ? { name: match[1], type: match[2], description: match[3] || '' } : undefined;
+      const match = line.match(/^([^:]+):\s*(.*)$/);
+      return match ? parseTextParameter(match[1], match[2]) : undefined;
     })
     .filter(Boolean);
   return {
@@ -86,13 +91,55 @@ function parseToolboxDescription(stdout, filePath) {
   };
 }
 
+function parseTextParameter(name, definition = '') {
+  const [first = '', ...rest] = definition.trim().split(/\s+/);
+  const knownTypes = new Set(['string', 'number', 'integer', 'boolean', 'array', 'object']);
+  if (!first || first.toLowerCase() === 'optional') {
+    return { name, type: 'string', description: ['optional', ...rest].filter(Boolean).join(' ') };
+  }
+  const optionalSuffix = first.endsWith('?');
+  const type = optionalSuffix ? first.slice(0, -1) : first;
+  if (knownTypes.has(type)) {
+    return { name, type, description: optionalText(rest.join(' '), optionalSuffix) };
+  }
+  return { name, type: 'string', description: definition.trim() };
+}
+
+function optionalText(description, optional) {
+  if (!optional) return description.replace(/^\(optional\)\s*/i, 'optional ');
+  return description.toLowerCase().startsWith('optional') ? description : `optional ${description}`.trim();
+}
+
 function normalizeToolboxInputSchema(input = {}) {
   if (Array.isArray(input)) return input;
+  if (input?.type === 'object' && input.properties && typeof input.properties === 'object') {
+    return Object.entries(input.properties).map(([name, value]) => ({
+      name,
+      type: schemaTypeName(value),
+      description: value?.description || '',
+    }));
+  }
   return Object.entries(input).map(([name, value]) => ({
     name,
-    type: value?.type || 'string',
-    description: value?.description || '',
+    type: compactArgType(value),
+    description: compactArgDescription(value),
   }));
+}
+
+function compactArgType(value) {
+  if (Array.isArray(value)) return value[0] || 'string';
+  return value?.type || 'string';
+}
+
+function compactArgDescription(value) {
+  if (Array.isArray(value)) return value[1] || '';
+  return value?.description || '';
+}
+
+function schemaTypeName(value = {}) {
+  const type = value.type || 'string';
+  if (type === 'array' && value.items?.type) return `array<${value.items.type}>`;
+  return type;
 }
 
 export function printToolboxSchema(tool) {
@@ -156,6 +203,7 @@ export function normalizeToolName(name = '') {
 }
 
 export function toolboxTemplate(shell, name) {
+  if (shell === 'js') return javascriptToolboxTemplate(name);
   return `#!/usr/bin/env ${shell}
 set -euo pipefail
 
@@ -177,6 +225,37 @@ fi
 `;
 }
 
+function javascriptToolboxTemplate(name) {
+  return `#!/usr/bin/env bun
+const action = process.env.TOOLBOX_ACTION ?? 'describe';
+
+if (action === 'describe') showDescription();
+else if (action === 'execute') execute();
+else {
+  console.error(\`Unknown action: \${action}\`);
+  process.exit(1);
+}
+
+function showDescription() {
+  process.stdout.write([
+    'name: ${name}',
+    'description: ${name.replaceAll('_', ' ')} toolbox tool',
+    'input: string optional Input passed to the tool',
+  ].join('\\n'));
+  process.stdout.write('\\n');
+}
+
+async function execute() {
+  const input = await new Response(Bun.stdin).text();
+  if (input.trim()) {
+    process.stdout.write(input.endsWith('\\n') ? input : \`\${input}\\n\`);
+  } else {
+    process.stdout.write('${name} executed\\n');
+  }
+}
+`;
+}
+
 export function executeToolboxTool(tool, flags, stdin, threadId) {
   const input = formatToolboxInput(tool, flags, stdin);
   return spawnSync(tool.path, {
@@ -184,8 +263,8 @@ export function executeToolboxTool(tool, flags, stdin, threadId) {
     env: {
       ...process.env,
       TOOLBOX_ACTION: 'execute',
-      AGENT: 'amp',
-      AMP_THREAD_ID: threadId,
+      AGENT: 'coven-code',
+      COVEN_CODE_THREAD_ID: threadId,
       AGENT_THREAD_ID: threadId,
     },
     encoding: 'utf8',

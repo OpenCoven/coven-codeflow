@@ -3,6 +3,8 @@ import { findWorkspaceSettingsFile, workspaceSettingsFile } from '../settings/pa
 import { readManagedSettings, readSettings, readSettingsFile, writeSettingsFile } from '../settings/load.mjs';
 import { globMatch } from '../util/glob.mjs';
 
+const MCP_PERMISSIONS_SETTING = 'covenCode.mcpPermissions';
+
 export function mcpPermissionRulesForCwd(parsed = {}) {
   const userSettings = readSettings(parsed);
   const workspacePath = findWorkspaceSettingsFile(process.cwd());
@@ -11,9 +13,9 @@ export function mcpPermissionRulesForCwd(parsed = {}) {
 }
 
 export function mcpPermissionRules(userSettings = {}, workspaceSettings = {}, managedSettings = {}) {
-  if (Array.isArray(managedSettings['amp.mcpPermissions'])) return managedSettings['amp.mcpPermissions'];
-  if (Array.isArray(workspaceSettings['amp.mcpPermissions'])) return workspaceSettings['amp.mcpPermissions'];
-  if (Array.isArray(userSettings['amp.mcpPermissions'])) return userSettings['amp.mcpPermissions'];
+  if (Array.isArray(managedSettings[MCP_PERMISSIONS_SETTING])) return managedSettings[MCP_PERMISSIONS_SETTING];
+  if (Array.isArray(workspaceSettings[MCP_PERMISSIONS_SETTING])) return workspaceSettings[MCP_PERMISSIONS_SETTING];
+  if (Array.isArray(userSettings[MCP_PERMISSIONS_SETTING])) return userSettings[MCP_PERMISSIONS_SETTING];
   return [];
 }
 

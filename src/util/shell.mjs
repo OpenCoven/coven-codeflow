@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 export function splitShellWords(line) {
@@ -13,36 +12,6 @@ export function splitShellWords(line) {
 
 export function shellQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
-}
-
-export function runShellCommand(command) {
-  return spawnSync(command, {
-    cwd: process.cwd(),
-    env: process.env,
-    shell: process.env.SHELL || true,
-    encoding: 'utf8',
-  });
-}
-
-export function processShellMode(input) {
-  const lines = input.split(/\r?\n/);
-  const promptLines = [];
-
-  for (const line of lines) {
-    if (line.startsWith('$$ ')) {
-      runShellCommand(line.slice(3));
-      continue;
-    }
-    if (line.startsWith('$ ')) {
-      const command = line.slice(2);
-      const result = runShellCommand(command);
-      promptLines.push(`[shell]\n$ ${command}\n${result.stdout}${result.stderr}`.trimEnd());
-      continue;
-    }
-    promptLines.push(line);
-  }
-
-  return promptLines.join('\n');
 }
 
 export function readStdin() {

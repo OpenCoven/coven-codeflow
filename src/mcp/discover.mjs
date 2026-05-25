@@ -5,46 +5,43 @@ import { findWorkspaceSettingsFile } from '../settings/paths.mjs';
 import {
   isMcpServerAllowed,
   mcpPermissionRules,
-  mcpPermissionRulesForCwd,
   mcpPermissionStatus,
   readWorkspaceMcpApprovals,
 } from './permissions.mjs';
+import { mcpRegistryGate, mcpRegistryStatus } from './registry.mjs';
 import { listSkills } from '../skills/discover.mjs';
 
+const MCP_SERVERS_SETTING = 'covenCode.mcpServers';
+
 export function listConfiguredMcpServers(parsed = {}) {
-  const userSettings = readSettings(parsed);
-  const workspacePath = findWorkspaceSettingsFile(process.cwd());
-  const workspaceSettings = workspacePath ? readSettingsFile(workspacePath) : {};
-  const managedSettings = readManagedSettings();
-  const approvals = readWorkspaceMcpApprovals(process.cwd());
-  const permissionRules = mcpPermissionRules(userSettings, workspaceSettings, managedSettings);
+  const { userSettings, workspaceSettings, managedSettings, approvals, permissionRules, registryGate } = mcpSettings(parsed);
   const byName = new Map();
 
-  for (const [name, config] of Object.entries(userSettings['amp.mcpServers'] ?? {})) {
+  for (const [name, config] of Object.entries(userSettings[MCP_SERVERS_SETTING] ?? {})) {
     const expandedConfig = expandMcpServerConfigEnv(config);
     byName.set(name, {
       name,
       config: expandedConfig,
       source: 'user',
-      status: mcpPermissionStatus('approved', expandedConfig, permissionRules),
+      status: mcpServerStatus('approved', expandedConfig, permissionRules, registryGate),
     });
   }
-  for (const [name, config] of Object.entries(workspaceSettings['amp.mcpServers'] ?? {})) {
+  for (const [name, config] of Object.entries(workspaceSettings[MCP_SERVERS_SETTING] ?? {})) {
     const expandedConfig = expandMcpServerConfigEnv(config);
     byName.set(name, {
       name,
       config: expandedConfig,
       source: 'workspace',
-      status: mcpPermissionStatus(approvals[name] ? 'approved' : 'awaiting approval', expandedConfig, permissionRules),
+      status: mcpServerStatus(approvals[name] ? 'approved' : 'awaiting approval', expandedConfig, permissionRules, registryGate),
     });
   }
-  for (const [name, config] of Object.entries(managedSettings['amp.mcpServers'] ?? {})) {
+  for (const [name, config] of Object.entries(managedSettings[MCP_SERVERS_SETTING] ?? {})) {
     const expandedConfig = expandMcpServerConfigEnv(config);
     byName.set(name, {
       name,
       config: expandedConfig,
       source: 'managed',
-      status: mcpPermissionStatus('approved', expandedConfig, permissionRules),
+      status: mcpServerStatus('approved', expandedConfig, permissionRules, registryGate),
     });
   }
 
@@ -52,8 +49,10 @@ export function listConfiguredMcpServers(parsed = {}) {
 }
 
 export function listActiveMcpServerEntries(parsed = {}, prompt = '') {
-  const permissionRules = mcpPermissionRulesForCwd(parsed);
+  const { permissionRules, registryGate } = mcpSettings(parsed);
   const inline = parseInlineMcpServers(parsed.mcpConfig)
+    .filter((server) => !isMcpServerDisabled(server.config))
+    .filter((server) => !mcpRegistryStatus(server.config, registryGate))
     .filter((server) => isMcpServerAllowed(server.config, permissionRules))
     .map((server) => ({
       name: server.name,
@@ -67,11 +66,39 @@ export function listActiveMcpServerEntries(parsed = {}, prompt = '') {
     .filter((server) => !inlineNames.has(server.name))
     .map((server) => ({ ...server, status: 'connected' }));
   const occupiedNames = new Set([...inline, ...configured].map((server) => server.name));
-  const skillServers = listSkillMcpServers(prompt)
+  const skillServers = listSkillMcpServers(prompt, parsed)
+    .filter((server) => !isMcpServerDisabled(server.config))
+    .filter((server) => !mcpRegistryStatus(server.config, registryGate))
     .filter((server) => isMcpServerAllowed(server.config, permissionRules))
     .filter((server) => !occupiedNames.has(server.name))
     .map((server) => ({ ...server, status: 'connected' }));
   return [...inline, ...configured, ...skillServers];
+}
+
+function mcpSettings(parsed = {}) {
+  const userSettings = readSettings(parsed);
+  const workspacePath = findWorkspaceSettingsFile(process.cwd());
+  const workspaceSettings = workspacePath ? readSettingsFile(workspacePath) : {};
+  const managedSettings = readManagedSettings();
+  return {
+    userSettings,
+    workspaceSettings,
+    managedSettings,
+    approvals: readWorkspaceMcpApprovals(process.cwd()),
+    permissionRules: mcpPermissionRules(userSettings, workspaceSettings, managedSettings),
+    registryGate: mcpRegistryGate(userSettings, workspaceSettings, managedSettings),
+  };
+}
+
+function mcpServerStatus(defaultStatus, config, permissionRules, registryGate) {
+  if (isMcpServerDisabled(config)) return 'disabled';
+  const registryStatus = mcpRegistryStatus(config, registryGate);
+  if (registryStatus) return registryStatus;
+  return mcpPermissionStatus(defaultStatus, config, permissionRules);
+}
+
+function isMcpServerDisabled(config = {}) {
+  return config.disabled === true;
 }
 
 export function listActiveMcpServers(parsed = {}) {
@@ -86,7 +113,7 @@ export function parseInlineMcpServers(raw) {
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
-    const servers = parsed.mcpServers ?? parsed['amp.mcpServers'] ?? parsed;
+    const servers = parsed.mcpServers ?? parsed[MCP_SERVERS_SETTING] ?? parsed;
     return Object.keys(servers).map((name) => ({ name, config: expandMcpServerConfigEnv(servers[name]) }));
   } catch {
     return [{ name: 'inline', config: { command: expandEnvVars(raw) } }];
@@ -111,10 +138,10 @@ export function formatMcpServerCommand(config) {
   return [config.command, ...(config.args ?? [])].filter(Boolean).join(' ');
 }
 
-export function listSkillMcpServers(prompt = '') {
+export function listSkillMcpServers(prompt = '', parsed = {}) {
   const lower = prompt.toLowerCase();
   const servers = [];
-  for (const skill of listSkills()) {
+  for (const skill of listSkills({ parsed })) {
     if (!lower.includes(skill.name.toLowerCase())) continue;
     const mcpPath = path.join(skill.dir, 'mcp.json');
     if (!existsSync(mcpPath)) continue;

@@ -12,6 +12,7 @@ import { runPlugins } from '../commands/plugins.mjs';
 import { runMcp } from '../commands/mcp.mjs';
 import { runSkill } from '../commands/skill.mjs';
 import { runThreads } from '../commands/threads.mjs';
+import { runIde } from '../commands/ide.mjs';
 
 export async function runCommand(command, args, parsed, stdin) {
   switch (command) {
@@ -19,16 +20,16 @@ export async function runCommand(command, args, parsed, stdin) {
       printHelp();
       break;
     case 'login':
-      runLogin();
+      await runLogin(args);
       break;
     case 'update':
-      runUpdate();
+      runUpdate(parsed);
       break;
     case 'review':
       runReview();
       break;
     case 'usage':
-      runUsage();
+      runUsage(parsed);
       break;
     case 'tools':
       await runTools(args, stdin, parsed);
@@ -40,6 +41,7 @@ export async function runCommand(command, args, parsed, stdin) {
       await runConfig(args, parsed);
       break;
     case 'agents':
+    case 'agents-md':
       await runAgents(args);
       break;
     case 'plugins':
@@ -49,10 +51,13 @@ export async function runCommand(command, args, parsed, stdin) {
       await runMcp(args, parsed);
       break;
     case 'skill':
-      await runSkill(args);
+      await runSkill(args, parsed);
       break;
     case 'threads':
       await runThreads(args, parsed, stdin);
+      break;
+    case 'ide':
+      runIde(args);
       break;
     default:
       if (parsed.help) printHelp();

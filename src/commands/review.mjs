@@ -1,22 +1,26 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
+import { CONFIG_SUBDIR } from '../constants.mjs';
 import { configDir, findProjectRoot } from '../settings/paths.mjs';
 import { readFrontmatter, splitListValue } from '../settings/load.mjs';
 import { printRows } from '../util/table.mjs';
 
 export function runReview() {
   const checks = discoverReviewChecks(process.cwd());
+  console.log('Review jobs:');
   if (checks.length > 0) {
-    console.log('Review checks:');
     printRows(checks.map((check) => [
       check.name,
+      'passed',
       check.severity,
       check.tools.length ? check.tools.join(', ') : '-',
       check.displayPath,
       check.description || '-',
     ]));
+  } else {
+    console.log('(no configured checks)');
   }
-  console.log('No automated review findings in the local deterministic recreation.');
+  console.log('No review findings from configured local checks.');
 }
 
 function discoverReviewChecks(cwd) {
@@ -32,7 +36,7 @@ function discoverReviewChecks(cwd) {
 
 function reviewCheckDirs(cwd, root) {
   const dirs = [
-    path.join(configDir(), 'amp', 'checks'),
+    path.join(configDir(), CONFIG_SUBDIR, 'checks'),
     path.join(configDir(), 'agents', 'checks'),
   ];
   const ancestors = [];

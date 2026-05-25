@@ -3,8 +3,11 @@ import { printHelp } from './cli/help.mjs';
 import { runCommand } from './cli/dispatch.mjs';
 import { runExecute } from './cli/execute.mjs';
 import { runInteractive } from './cli/repl.mjs';
+import { runIdeConnect } from './commands/ide.mjs';
 import { readStdin } from './util/shell.mjs';
-import { VERSION } from './constants.mjs';
+import { AGENT_MODES, VERSION } from './constants.mjs';
+import { latestActiveThread, requireThread } from './threads/store.mjs';
+import { reasoningEffortForMode } from './cli/reasoning.mjs';
 
 export { UsageError };
 
@@ -23,6 +26,11 @@ export async function main() {
     return;
   }
 
+  if (parsed.ide) {
+    runIdeConnect(parsed.ide);
+    return;
+  }
+
   const command = parsed.positionals[0];
   if (command) {
     await runCommand(command, parsed.positionals.slice(1), parsed, stdin);
@@ -35,16 +43,31 @@ export async function main() {
   if (parsed.streamJsonInput && !parsed.streamJson) {
     throw new UsageError('--stream-json-input requires --stream-json');
   }
+  if (parsed.continueThread && !parsed.execute) {
+    throw new UsageError('--continue requires --execute');
+  }
+  if (!AGENT_MODES.includes(parsed.mode)) {
+    throw new UsageError(`mode must be one of: ${AGENT_MODES.join(', ')}`);
+  }
+  parsed.reasoningEffort = reasoningEffortForMode(parsed.mode, parsed.reasoningEffort);
 
-  if (parsed.execute || stdin.length > 0) {
-    await runExecute(parsed, stdin);
+  if (parsed.execute || (stdin.length > 0 && !process.stdout.isTTY)) {
+    await runExecute(parsed, stdin, { thread: continuationThread(parsed) });
     return;
   }
 
-  if (process.stdout.isTTY && process.stdin.isTTY) {
-    await runInteractive(parsed);
+  if (process.stdout.isTTY && (process.stdin.isTTY || stdin.length > 0)) {
+    await runInteractive(parsed, stdin);
     return;
   }
 
   printHelp();
+}
+
+function continuationThread(parsed) {
+  if (!parsed.continueThread) return undefined;
+  if (typeof parsed.continueThread === 'string') return requireThread(parsed.continueThread);
+  const thread = latestActiveThread();
+  if (!thread) throw new UsageError('No active thread to continue');
+  return thread;
 }

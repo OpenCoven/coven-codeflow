@@ -1,6 +1,6 @@
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { BUILTIN_TOOLS } from '../constants.mjs';
+import { BUILTIN_TOOLS, CLI_NAME } from '../constants.mjs';
 import { writableToolsDir } from '../settings/paths.mjs';
 import { listConfiguredMcpServers } from '../mcp/discover.mjs';
 import { discoverMcpToolRows } from '../mcp/probe.mjs';
@@ -20,7 +20,7 @@ import { printRows } from '../util/table.mjs';
 export async function runTools(args, stdin, parsed = {}) {
   const subcommand = args[0] ?? 'list';
   if (subcommand === 'list') {
-    const mcpToolRows = discoverMcpToolRows(
+    const mcpToolRows = await discoverMcpToolRows(
       listConfiguredMcpServers(parsed).filter((server) => server.status === 'approved'),
     );
     const pluginToolRows = (await listPluginTools(process.cwd()))
@@ -29,14 +29,14 @@ export async function runTools(args, stdin, parsed = {}) {
       ...BUILTIN_TOOLS,
       ...mcpToolRows,
       ...pluginToolRows,
-      ...listToolboxTools().map((tool) => [tool.name, 'toolbox', tool.description]),
+      ...listToolboxTools(parsed).map((tool) => [tool.name, 'toolbox', tool.description]),
     ].filter(([name, kind]) => !isToolDisabled(name, kind, parsed));
     printRows(rows);
     return;
   }
 
   if (subcommand === 'make') {
-    const shell = args.includes('--zsh') ? 'zsh' : 'bash';
+    const shell = args.includes('--zsh') ? 'zsh' : args.includes('--bash') ? 'bash' : 'js';
     const rawName = args.find((arg) => !arg.startsWith('-') && arg !== 'make') ?? 'tool';
     const toolName = rawName.replace(/[^a-zA-Z0-9_-]/g, '_');
     const filePath = path.join(writableToolsDir(), toolName);
@@ -44,14 +44,14 @@ export async function runTools(args, stdin, parsed = {}) {
     await writeFile(filePath, toolboxTemplate(shell, toolName), 'utf8');
     await chmod(filePath, 0o755);
     console.log(`Tool created at: ${filePath}`);
-    console.log(`Inspect with: amp tools show tb__${toolName}`);
-    console.log(`Execute with: amp tools use tb__${toolName}`);
+    console.log(`Inspect with: ${CLI_NAME} tools show tb__${toolName}`);
+    console.log(`Execute with: ${CLI_NAME} tools use tb__${toolName}`);
     return;
   }
 
   if (subcommand === 'show') {
     const toolName = normalizeToolName(args[1]);
-    const tool = listToolboxTools().find((entry) => entry.name === toolName);
+    const tool = listToolboxTools(parsed).find((entry) => entry.name === toolName);
     if (!tool) throw new UsageError(`Unknown tool: ${args[1] ?? ''}`);
     printToolboxSchema(tool);
     return;
@@ -60,7 +60,7 @@ export async function runTools(args, stdin, parsed = {}) {
   if (subcommand === 'use') {
     const useArgs = parseToolUseArgs(args.slice(1));
     const toolName = normalizeToolName(useArgs.toolName);
-    const tool = listToolboxTools().find((entry) => entry.name === toolName);
+    const tool = listToolboxTools(parsed).find((entry) => entry.name === toolName);
     if (!tool) throw new UsageError(`Unknown tool: ${useArgs.toolName ?? ''}`);
     const result = executeToolboxTool(tool, useArgs.flags, stdin, useArgs.threadId);
     if (useArgs.onlyOutput) {

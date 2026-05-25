@@ -1,13 +1,17 @@
 import { listThreads } from '../threads/store.mjs';
 import { estimateTokenCount } from '../agent/local.mjs';
+import { readEffectiveSettings } from '../settings/load.mjs';
 
-export function runUsage() {
+export function runUsage(parsed = {}) {
   const summary = localUsageSummary();
-  console.log('remote_balance: unavailable (local recreation)');
+  const showCosts = readEffectiveSettings(parsed)['covenCode.showCosts'] !== false;
+  if (showCosts) console.log('remote_balance: unavailable (local recreation)');
   console.log(`threads: ${summary.threads}`);
   console.log(`turns: ${summary.turns}`);
-  console.log(`input_tokens_estimate: ${summary.inputTokens}`);
-  console.log(`output_tokens_estimate: ${summary.outputTokens}`);
+  if (showCosts) {
+    console.log(`input_tokens_estimate: ${summary.inputTokens}`);
+    console.log(`output_tokens_estimate: ${summary.outputTokens}`);
+  }
 }
 
 function localUsageSummary() {

@@ -1,12 +1,13 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { FILE_MENTION_MAX_LINES, FILE_MENTION_MAX_LINE_LENGTH } from '../constants.mjs';
+import { FILE_MENTION_MAX_LINES, FILE_MENTION_MAX_LINE_LENGTH, THREAD_URL_BASE } from '../constants.mjs';
 import { globToRegex, hasGlob, walkFiles } from '../util/glob.mjs';
-import { readThread } from '../threads/store.mjs';
+import { listThreads, readThread, threadSearchText } from '../threads/store.mjs';
+import { readEffectiveSettings } from '../settings/load.mjs';
 
 export function expandFileReferences(prompt, options = {}) {
-  return prompt.replace(/@(?!(?:T-|@))((?:~|\/|\.{1,2}\/)?[A-Za-z0-9_./*?-]+\.[A-Za-z0-9_*-]+)/g, (match, rawPath) => {
+  return prompt.replace(/@(?!(?:T-|@))((?:~|\/|\.{1,2}\/)?[A-Za-z0-9_./*?-]*[A-Za-z0-9_*-])/g, (match, rawPath) => {
     const blocks = mentionedFiles(rawPath, options)
       .map((filePath) => fileMentionBlock(filePath, options))
       .filter(Boolean);
@@ -61,8 +62,11 @@ function mentionedFiles(rawPath, options = {}) {
     ? path.join(os.homedir(), rawPath.slice(2))
     : path.resolve(options.baseDir ?? process.cwd(), rawPath);
   const re = globToRegex(path.normalize(pattern));
+  const ignored = gitignoredFileMatcher(options.baseDir ?? process.cwd());
+  const alwaysIncluded = alwaysIncludedFileMatcher(options.baseDir ?? process.cwd(), options.parsed);
   return walkFiles(root)
     .filter((filePath) => re.test(path.normalize(filePath)))
+    .filter((filePath) => !ignored(filePath) || alwaysIncluded(filePath))
     .sort((a, b) => a.localeCompare(b));
 }
 
@@ -84,10 +88,75 @@ function globSearchRoot(rawPath, options = {}) {
   return existsSync(root) && statSync(root).isDirectory() ? root : path.dirname(root);
 }
 
+function gitignoredFileMatcher(baseDir) {
+  const gitignorePath = findUp('.gitignore', baseDir);
+  if (!gitignorePath) return () => false;
+  const root = path.dirname(gitignorePath);
+  const patterns = readFileSync(gitignorePath, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && !line.startsWith('!'))
+    .map((line) => gitignorePatternRegex(root, line));
+  return (filePath) => patterns.some((pattern) => pattern.test(path.normalize(filePath)));
+}
+
+function alwaysIncludedFileMatcher(baseDir, parsed = {}) {
+  const settings = readEffectiveSettings(parsed);
+  const patterns = Array.isArray(settings['covenCode.fuzzy.alwaysIncludePaths'])
+    ? settings['covenCode.fuzzy.alwaysIncludePaths']
+    : [];
+  const root = path.dirname(findUp('.gitignore', baseDir) ?? path.join(path.resolve(baseDir), '.gitignore'));
+  const regexes = patterns
+    .filter((pattern) => typeof pattern === 'string' && pattern.trim())
+    .map((pattern) => globToRegex(path.normalize(path.resolve(root, pattern))));
+  return (filePath) => regexes.some((pattern) => pattern.test(path.normalize(filePath)));
+}
+
+function gitignorePatternRegex(root, pattern) {
+  const directoryOnly = pattern.endsWith('/');
+  const cleanPattern = pattern.replace(/\/+$/, '');
+  const absolutePattern = path.resolve(root, cleanPattern);
+  const source = directoryOnly
+    ? `${globToRegex(path.normalize(absolutePattern)).source.slice(1, -1)}(?:${escapePathSep()}.*)?`
+    : globToRegex(path.normalize(absolutePattern)).source.slice(1, -1);
+  return new RegExp(`^${source}$`);
+}
+
+function escapePathSep() {
+  return path.sep === '\\' ? '\\\\' : '/';
+}
+
+function findUp(name, cwd) {
+  let current = path.resolve(cwd);
+  while (true) {
+    const candidate = path.join(current, name);
+    if (existsSync(candidate)) return candidate;
+    const parent = path.dirname(current);
+    if (parent === current || current === os.homedir()) return undefined;
+    current = parent;
+  }
+}
+
 export function expandThreadReferences(prompt) {
-  return prompt.replace(/(?:@|https:\/\/ampcode\.com\/threads\/)(T-[A-Za-z0-9-]+)/g, (match, threadId) => {
+  const threadUrlPattern = THREAD_URL_BASE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const explicitReferences = prompt.replace(new RegExp(`(?:@|${threadUrlPattern}/)(T-[A-Za-z0-9-]+)`, 'g'), (match, threadId) => {
     const thread = readThread(threadId);
     if (!thread) return match;
-    return `[thread:${thread.id}]\n${thread.messages.map((message) => `${message.role}: ${message.content}`).join('\n')}\n[/thread]`;
+    return threadMentionBlock(thread);
   });
+  return explicitReferences.replace(/@@([A-Za-z0-9_.:/-]+)/g, (match, rawQuery) => {
+    const thread = findMentionedThread(rawQuery);
+    return thread ? threadMentionBlock(thread) : match;
+  });
+}
+
+function findMentionedThread(rawQuery) {
+  const query = String(rawQuery ?? '').trim().toLowerCase();
+  if (!query) return undefined;
+  return listThreads()
+    .filter((thread) => threadSearchText(thread).toLowerCase().includes(query))[0];
+}
+
+function threadMentionBlock(thread) {
+  return `[thread:${thread.id}]\n${thread.messages.map((message) => `${message.role}: ${message.content}`).join('\n')}\n[/thread]`;
 }

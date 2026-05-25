@@ -5,8 +5,11 @@ import { settingsFile, workspaceSettingsFile } from '../settings/paths.mjs';
 import { readSettingsFile, writeSettingsFile } from '../settings/load.mjs';
 import { formatMcpServerCommand, listConfiguredMcpServers } from '../mcp/discover.mjs';
 import { readWorkspaceMcpApprovals, writeWorkspaceMcpApprovals } from '../mcp/permissions.mjs';
+import { mcpServerHealth } from '../mcp/probe.mjs';
 import { UsageError } from '../cli/parse.mjs';
 import { printRows } from '../util/table.mjs';
+
+const MCP_SERVERS_SETTING = 'covenCode.mcpServers';
 
 export async function runMcp(args, parsed = {}) {
   const subcommand = args[0] ?? 'list';
@@ -25,8 +28,8 @@ export async function runMcp(args, parsed = {}) {
     const specArgs = separator === -1 ? tokens.slice(1) : tokens.slice(separator + 1);
     const settingsPath = workspace ? workspaceSettingsFile(process.cwd()) : settingsFile(parsed);
     const settings = readSettingsFile(settingsPath);
-    settings['amp.mcpServers'] = {
-      ...(settings['amp.mcpServers'] ?? {}),
+    settings[MCP_SERVERS_SETTING] = {
+      ...(settings[MCP_SERVERS_SETTING] ?? {}),
       [name]: parseMcpServerSpec(specArgs),
     };
     await writeSettingsFile(settingsPath, settings);
@@ -34,7 +37,7 @@ export async function runMcp(args, parsed = {}) {
     return;
   }
 
-  if (subcommand === 'list' || subcommand === 'doctor') {
+  if (subcommand === 'list') {
     const rows = listConfiguredMcpServers(parsed).map((server) => [
       server.name,
       server.source,
@@ -42,6 +45,21 @@ export async function runMcp(args, parsed = {}) {
       formatMcpServerCommand(server.config),
     ]);
     printRows(rows.length ? rows : [['(none)', '-', '-', '-']]);
+    return;
+  }
+
+  if (subcommand === 'doctor') {
+    const rows = [];
+    for (const server of listConfiguredMcpServers(parsed)) {
+      rows.push([
+        server.name,
+        server.source,
+        server.status,
+        server.status === 'approved' ? await mcpServerHealth(server.config, server.name) : 'not probed',
+        formatMcpServerCommand(server.config),
+      ]);
+    }
+    printRows(rows.length ? rows : [['(none)', '-', '-', '-', '-']]);
     return;
   }
 
@@ -118,12 +136,41 @@ function splitScopes(value) {
 }
 
 function mcpOauthCredentialFile(name) {
-  return path.join(os.homedir(), '.amp', 'oauth', `${name}.json`);
+  return path.join(os.homedir(), '.coven-code', 'oauth', `${name}.json`);
 }
 
 function parseMcpServerSpec(args) {
-  if (args.length === 1 && /^https?:\/\//.test(args[0])) return { url: args[0] };
+  if (isRemoteMcpServerSpec(args)) return parseRemoteMcpServerSpec(args);
   const [command, ...commandArgs] = args;
   if (!command) throw new UsageError('mcp add requires a command or URL after --');
   return { command, args: commandArgs };
+}
+
+function isRemoteMcpServerSpec(args) {
+  return /^https?:\/\//.test(args[0] ?? '') || args[0] === '--header';
+}
+
+function parseRemoteMcpServerSpec(args) {
+  const headers = {};
+  const endpoints = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--header') {
+      const header = args[index + 1];
+      if (!header) throw new UsageError('mcp add --header requires NAME=VALUE');
+      const separator = header.indexOf('=');
+      if (separator <= 0) throw new UsageError('mcp add --header requires NAME=VALUE');
+      headers[header.slice(0, separator).trim()] = header.slice(separator + 1).trim();
+      index += 1;
+    } else {
+      endpoints.push(arg);
+    }
+  }
+  if (endpoints.length !== 1 || !/^https?:\/\//.test(endpoints[0])) {
+    throw new UsageError('mcp add remote servers require exactly one HTTP URL');
+  }
+  return {
+    url: endpoints[0],
+    ...(Object.keys(headers).length ? { headers } : {}),
+  };
 }

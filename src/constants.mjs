@@ -1,4 +1,10 @@
 export const VERSION = '0.0.0-recreate';
+export const PRODUCT_NAME = 'Coven Code';
+export const CLI_NAME = 'coven-code';
+export const PACKAGE_NAME = '@opencoven/coven-code';
+export const CONFIG_SUBDIR = 'coven-code';
+export const PROJECT_SUBDIR = '.coven-code';
+export const THREAD_URL_BASE = 'https://coven-code.local/threads';
 
 export const FILE_MENTION_MAX_LINES = 500;
 export const FILE_MENTION_MAX_LINE_LENGTH = 2048;
@@ -13,8 +19,18 @@ export const BUILTIN_TOOLS = [
   ['glob', 'built-in', 'Finds files by glob pattern'],
   ['create_file', 'built-in', 'Creates a new file'],
   ['edit_file', 'built-in', 'Edits an existing file'],
-  ['oracle', 'built-in', 'Asks a second-opinion model for review or reasoning'],
+  ['oracle', 'built-in', 'Asks for second-opinion review or reasoning'],
+  ['librarian', 'built-in', 'Researches code across repositories or the current workspace'],
   ['Task', 'built-in', 'Runs an isolated subagent for delegated work'],
+  ['painter', 'built-in', 'Generates or edits local image artifacts'],
+  ['mermaid', 'built-in', 'Renders a Mermaid diagram from the provided code'],
+  ['look_at', 'built-in', 'Inspects images, PDFs, or media files with a goal'],
+  ['web_search', 'built-in', 'Searches the web for information'],
+  ['read_web_page', 'built-in', 'Reads and extracts text from a web page'],
+  ['undo_edit', 'built-in', 'Undoes the latest edit_file change'],
+  ['find_thread', 'built-in', 'Finds prior threads by keyword, file, or task context'],
+  ['finder', 'built-in', 'Finds prior threads by keyword, file, or task context'],
+  ['read_mcp_resource', 'built-in', 'Reads a resource from a configured MCP server'],
 ];
 
 export const BUILTIN_PERMISSIONS = [

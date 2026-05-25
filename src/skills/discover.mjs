@@ -1,14 +1,18 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { CONFIG_SUBDIR } from '../constants.mjs';
 import { configDir, expandHomePath } from '../settings/paths.mjs';
 import { readSettings } from '../settings/load.mjs';
 import { UsageError } from '../cli/parse.mjs';
 
+const BUILTIN_SKILLS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'builtin');
+
 export function listSkills(options = {}) {
   const seen = new Set();
   const skills = [];
-  for (const root of skillSearchRoots()) {
+  for (const root of [...parsedSkillRoots(options.parsed), ...skillSearchRoots()]) {
     if (!existsSync(root.dir)) continue;
     for (const entry of readdirSync(root.dir)) {
       const dir = path.join(root.dir, entry);
@@ -28,28 +32,48 @@ export function findSkill(name) {
 }
 
 export function skillSearchRoots() {
-  const ampNativeRoots = [
-    { source: 'project', dir: path.join(process.cwd(), '.agents', 'skills') },
+  const userRoots = [
     { source: 'user', dir: path.join(configDir(), 'agents', 'skills') },
-    { source: 'user', dir: path.join(configDir(), 'amp', 'skills') },
-    ...configuredSkillRoots(),
+    { source: 'user', dir: path.join(configDir(), CONFIG_SUBDIR, 'skills') },
+    ...configuredSkillRoots(readSettings({})),
   ];
-  if (readSettings({})['amp.skills.disableClaudeCodeSkills'] === true) return ampNativeRoots;
+  const projectRoots = projectSkillRoots('.agents', 'skills');
+  if (readSettings({})['covenCode.skills.disableLegacySkillRoots'] === true) return [...userRoots, ...projectRoots];
   return [
-    ampNativeRoots[0],
-    { source: 'project', dir: path.join(process.cwd(), '.claude', 'skills') },
-    ...ampNativeRoots.slice(1),
+    ...userRoots,
+    ...projectRoots,
+    ...projectSkillRoots('.claude', 'skills'),
     { source: 'user', dir: path.join(os.homedir(), '.claude', 'skills') },
+    { source: 'built-in', dir: BUILTIN_SKILLS_DIR },
   ];
 }
 
-function configuredSkillRoots() {
-  const rawPath = readSettings({})['amp.skills.path'];
+function projectSkillRoots(...parts) {
+  const roots = [];
+  const home = os.homedir();
+  let current = path.resolve(process.cwd());
+  while (true) {
+    roots.push({ source: 'project', dir: path.join(current, ...parts) });
+    if (current === home || current === path.dirname(current)) break;
+    current = path.dirname(current);
+  }
+  return roots;
+}
+
+export function parsedSkillRoots(parsed = {}) {
+  return splitSkillPath(parsed.skills).map((entry) => ({ source: 'cli', dir: expandHomePath(entry) }));
+}
+
+function configuredSkillRoots(settings) {
+  const rawPath = settings['covenCode.skills.path'];
+  return splitSkillPath(rawPath).map((entry) => ({ source: 'user', dir: expandHomePath(entry) }));
+}
+
+function splitSkillPath(rawPath) {
   if (typeof rawPath !== 'string' || rawPath.trim() === '') return [];
   return rawPath
     .split(path.delimiter)
-    .filter(Boolean)
-    .map((entry) => ({ source: 'user', dir: expandHomePath(entry) }));
+    .filter(Boolean);
 }
 
 export function readSkillMetadata(dir) {

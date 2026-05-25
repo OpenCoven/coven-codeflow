@@ -117,6 +117,34 @@ test('prints a Coven Code help screen with renamed binary', () => {
   assert.doesNotMatch(result.stdout, new RegExp(`\\b${oldTitle}\\b|${oldLower}code|Usage:\\s+${oldLower}\\b`));
 });
 
+test('interactive core handles mode, reasoning, queue, and new thread slash commands', async () => {
+  const { createInteractiveSession, handleInteractiveInput } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'interactive-core.mjs')));
+  const parsed = { mode: 'smart', reasoningEffort: undefined };
+  const session = createInteractiveSession(parsed);
+
+  const mode = await handleInteractiveInput(session, '/mode deep');
+  assert.equal(mode.kind, 'command');
+  assert.deepEqual(mode.lines, ['mode: deep', 'reasoning effort: high']);
+  assert.equal(parsed.mode, 'deep');
+  assert.equal(parsed.reasoningEffort, 'high');
+
+  const reasoning = await handleInteractiveInput(session, '/reasoning next');
+  assert.equal(reasoning.kind, 'command');
+  assert.deepEqual(reasoning.lines, ['reasoning effort: low']);
+  assert.equal(parsed.reasoningEffort, 'low');
+
+  const queued = await handleInteractiveInput(session, '/queue follow up');
+  assert.equal(queued.kind, 'command');
+  assert.deepEqual(queued.lines, ['queued: follow up']);
+  assert.deepEqual(session.queuedMessages, ['follow up']);
+
+  session.thread = { id: 'T-test', messages: [{ role: 'user', content: 'hi' }] };
+  const fresh = await handleInteractiveInput(session, '/new');
+  assert.equal(fresh.kind, 'command');
+  assert.deepEqual(fresh.lines, ['new thread']);
+  assert.equal(session.thread, undefined);
+});
+
 test('help lists documented noninteractive and config flags', () => {
   const result = runCovenCode(['--help']);
 

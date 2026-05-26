@@ -183,12 +183,91 @@ test('tui model renders panel layout with transcript tabs status rail and compos
   const frame = renderTuiFrame(model, { columns: 82, rows: 24, color: false });
 
   assert.match(frame, /Coven Code 0\.0\.0-test/);
-  assert.match(frame, /chat\s+tools\s+threads\s+config\s+help/);
+  assert.match(frame, /chat\s+lane\s+tools\s+threads\s+config\s+help/);
   assert.match(frame, /you/);
   assert.match(frame, /hello/);
   assert.match(frame, /thread: T-test/);
   assert.match(frame, /mode: smart/);
   assert.match(frame, /> what is 2\+2\?/);
+});
+
+test('tui lane panel renders worktree branch harness git diff verification and cleanup state', async () => {
+  const { createTuiModel, renderTuiFrame } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'tui.mjs')));
+
+  const model = createTuiModel({
+    activeTab: 'lane',
+    lane: {
+      worktree: '/tmp/cast-codes-lane',
+      branch: 'meow/lane-parity',
+      baseBranch: 'main',
+      harness: 'deep',
+      status: 'ready',
+      changedFiles: ['app/src/lane.rs', 'app/src/workspace.rs'],
+      diffSummary: '2 files changed, 18 insertions(+)',
+      verification: {
+        command: 'cargo check -p warp-app --bin cast-codes --features gui',
+        status: 'passed',
+      },
+      terminalLines: ['cargo check finished'],
+      pullRequest: 'not opened',
+      merge: 'not merged',
+      cleanup: 'pending',
+    },
+  });
+
+  const frame = renderTuiFrame(model, { columns: 120, rows: 30 });
+
+  assert.match(frame, /chat\s+lane\s+tools\s+threads\s+config\s+help/);
+  assert.match(frame, /worktree: \/tmp\/cast-codes-lane/);
+  assert.match(frame, /branch: meow\/lane-parity/);
+  assert.match(frame, /base: main/);
+  assert.match(frame, /harness: deep/);
+  assert.match(frame, /app\/src\/lane\.rs/);
+  assert.match(frame, /2 files changed, 18 insertions/);
+  assert.match(frame, /verify: passed/);
+  assert.match(frame, /PR: not opened/);
+  assert.match(frame, /merge: not merged/);
+  assert.match(frame, /cleanup: pending/);
+});
+
+test('tui lane commands refresh git state and cycle harness without leaving the panel', async () => {
+  const { createTuiModel, handleTuiKey } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'tui.mjs')));
+  const model = createTuiModel({ activeTab: 'lane', mode: 'smart', reasoningEffort: 'medium' });
+  const session = {
+    parsed: { mode: 'smart', reasoningEffort: 'medium' },
+    queuedMessages: [],
+    commandRunner: async () => {},
+    executeRunner: async () => undefined,
+    editorReader: async () => '',
+    laneInspector: async () => ({
+      worktree: '/tmp/cast-codes-lane',
+      branch: 'meow/lane-parity',
+      baseBranch: 'main',
+      harness: 'smart',
+      status: 'dirty',
+      changedFiles: ['README.md'],
+      diffSummary: '1 file changed, 2 insertions(+)',
+      verification: { command: 'npm test', status: 'not run' },
+      terminalLines: ['git status --short', ' M README.md'],
+      pullRequest: 'not opened',
+      merge: 'not merged',
+      cleanup: 'pending',
+    }),
+  };
+
+  model.composer = '/lane refresh';
+  await handleTuiKey(model, session, { name: 'enter' });
+
+  assert.equal(model.activeTab, 'lane');
+  assert.equal(model.lane.branch, 'meow/lane-parity');
+  assert.deepEqual(model.lane.changedFiles, ['README.md']);
+  assert.match(model.transcript.at(-1).text, /lane refreshed: meow\/lane-parity/);
+
+  model.composer = '/lane harness deep';
+  await handleTuiKey(model, session, { name: 'enter' });
+
+  assert.equal(model.lane.harness, 'deep');
+  assert.match(model.transcript.at(-1).text, /harness: deep/);
 });
 
 test('tui key handling cycles tabs and command palette actions reuse interactive commands', async () => {
@@ -203,7 +282,7 @@ test('tui key handling cycles tabs and command palette actions reuse interactive
   };
 
   await handleTuiKey(model, session, { name: 'tab' });
-  assert.equal(model.activeTab, 'tools');
+  assert.equal(model.activeTab, 'lane');
 
   await handleTuiKey(model, session, { ctrl: true, name: 'p' });
   assert.equal(model.paletteOpen, true);
@@ -242,10 +321,13 @@ test('tui scripted smoke processes input and exits without changing execute mode
   assert.equal(execute.stdout.trim(), '4');
 });
 
-test('tui scripted prompt renders assistant output inside the transcript', () => {
+test('tui scripted prompt renders assistant output inside the transcript', async () => {
+  const home = await mkdtemp(path.join(tmpdir(), 'coven-code-tui-home-'));
   const result = runCovenCode([], {
-    input: 'hello tui\n/exit\n',
+    input: 'what is 2+2?\n/exit\n',
     env: {
+      HOME: home,
+      XDG_CONFIG_HOME: path.join(home, '.config'),
       COVEN_CODE_TUI_SCRIPTED: '1',
       COVEN_CODE_REPL_HISTORY: '0',
     },
@@ -254,9 +336,9 @@ test('tui scripted prompt renders assistant output inside the transcript', () =>
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Coven Code/);
   assert.match(result.stdout, /you:/);
-  assert.match(result.stdout, /hello tui/);
+  assert.match(result.stdout, /what is 2\+2\?/);
   assert.match(result.stdout, /coven:/);
-  assert.match(result.stdout, /Coven Code local runtime received: hello tui/);
+  assert.match(result.stdout, /\b4\b/);
   assert.doesNotMatch(result.stdout.trimStart(), /^Coven Code local runtime received:/);
 });
 

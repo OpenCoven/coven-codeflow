@@ -24,9 +24,6 @@ export function localAgentResponse(prompt, stdin) {
   if (lower.includes('package manager')) {
     return detectPackageManager();
   }
-  if (lower.includes('review')) {
-    return 'No automated review findings in the local deterministic recreation.';
-  }
   if (lower.includes('what did the shell command output')) {
     return extractShellOutput(text) || 'No shell output is available from the captured context.';
   }
@@ -50,6 +47,9 @@ export function localAgentResponse(prompt, stdin) {
   }
   if (lower.includes('codename')) {
     return 'No codename was found.';
+  }
+  if (lower.includes('review')) {
+    return 'No automated review findings in the local deterministic recreation.';
   }
   if (stdin.trim()) {
     return `Received ${stdin.trim().split(/\s+/).length} input words and prompt: ${parsedSummary(text)}`;

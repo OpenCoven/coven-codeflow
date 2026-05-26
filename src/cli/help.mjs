@@ -48,5 +48,11 @@ Commands:
                                Manage local thread records
   agents-md list               Show AGENTS.md guidance files used for this cwd
   agents list                  Alias for agents-md list
+
+TUI lane commands:
+  /lane refresh                Refresh worktree, branch, changed files, and diff summary
+  /lane harness <name|next>    Select smart, deep, rush, or large for the lane
+  /lane verify                 Run the detected verification command for the lane
+  /lane status|diff            Show lane status or diff summary
 `);
 }

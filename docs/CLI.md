@@ -36,18 +36,22 @@ local thread and accepts slash commands:
 
 ```text
 Coven Code 0.0.0-recreate
-chat tools threads config help
+chat lane tools threads config help
 --------------------------------------------------------------------------------
 Ready. Type a prompt or /help.                         | thread: new thread
-                                                        | mode: smart
-                                                        | reasoning: high
+                                                        | lane: unknown
+                                                        | harness: smart
 --------------------------------------------------------------------------------
 > /help
 ```
 
 Supported interactive behaviors include:
 
-- panel tabs for chat, tools, threads, config, and help
+- panel tabs for chat, lane, tools, threads, config, and help
+- `/lane refresh` to load current worktree, branch, changed files, and diff summary
+- `/lane harness <smart|deep|rush|large|next>` to select the active lane harness
+- `/lane verify` to run the detected verification command and keep its output in the lane panel
+- `/lane status` and `/lane diff` to inspect the visible lane model
 - command palette actions for common thread and tool workflows
 - persistent line history
 - `/new` to start a fresh thread

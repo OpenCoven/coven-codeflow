@@ -1,11 +1,10 @@
 import * as readline from 'node:readline/promises';
 import { CLI_NAME, REPL_HISTORY_LIMIT, VERSION } from '../constants.mjs';
 import {
-  appendReplHistory,
   createInteractiveSession,
   handleInteractiveInput,
-  loadReplHistory,
 } from './interactive-core.mjs';
+import { appendReplHistory, loadReplHistory } from './interactive-io.mjs';
 
 export async function runInteractive(parsed, initialInput = '') {
   const rl = readline.createInterface({

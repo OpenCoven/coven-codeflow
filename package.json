@@ -10,8 +10,8 @@
     ".": "./src/sdk.mjs"
   },
   "bin": {
-    "coven-code": "./bin/coven-code.mjs",
-    "coven-code-sdk": "./bin/coven-code-sdk.mjs"
+    "coven-code": "bin/coven-code.mjs",
+    "coven-code-sdk": "bin/coven-code-sdk.mjs"
   },
   "files": [
     "bin/",

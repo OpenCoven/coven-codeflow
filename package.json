@@ -23,7 +23,7 @@
     "access": "public"
   },
   "scripts": {
-    "test": "node --test test/cli.test.mjs test/commands.test.mjs test/config.test.mjs test/execute.test.mjs test/mcp.test.mjs test/permissions.test.mjs test/plugins.test.mjs test/sdk.test.mjs test/skills.test.mjs test/stream-json.test.mjs test/threads.test.mjs test/tools.test.mjs test/tui.test.mjs",
+    "test": "node --test test/cli.test.mjs test/commands.test.mjs test/config.test.mjs test/execute.test.mjs test/mcp.test.mjs test/permissions.test.mjs test/plugins-agent-events.test.mjs test/plugins-commands.test.mjs test/plugins-discovery.test.mjs test/plugins-tool-events.test.mjs test/sdk.test.mjs test/skills.test.mjs test/stream-json.test.mjs test/threads.test.mjs test/tools.test.mjs test/tui.test.mjs",
     "start": "node ./bin/coven-code.mjs",
     "coven-code": "node ./bin/coven-code.mjs"
   },

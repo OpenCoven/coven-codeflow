@@ -17,6 +17,7 @@ import {
   runGit,
   escapeRegExp,
   expectAvailable,
+  version,
 } from './_helpers.mjs';
 
 function trackedAndUntrackedTextFiles() {
@@ -148,6 +149,19 @@ test('package metadata uses the Coven Code npm package and binaries', async () =
     'coven-code': 'bin/coven-code.mjs',
     'coven-code-sdk': 'bin/coven-code-sdk.mjs',
   });
+});
+
+test('docs version banners match package.json version', async () => {
+  const banner = new RegExp(`Coven Code (?!${escapeRegExp(version)}\\b)\\d+\\.\\d+\\.\\d+(?:-[A-Za-z0-9.-]+)?`, 'g');
+  for (const relativePath of ['README.md', 'docs/CLI.md']) {
+    const contents = await readFile(path.join(repoRoot, relativePath), 'utf8');
+    const stale = contents.match(banner);
+    assert.equal(
+      stale,
+      null,
+      `${relativePath} contains a "Coven Code <version>" banner that does not match package.json (${version}): ${stale}. Update the docs after bumping package.json.`,
+    );
+  }
 });
 
 test('themes command is removed in the rebuilt CLI', async () => {

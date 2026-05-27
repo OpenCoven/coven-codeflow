@@ -8,7 +8,6 @@ import {
   filterSlashCommands,
 } from './slash-commands.mjs';
 import {
-  PALETTE_ACTIONS,
   TABS,
   buildPanelSummaries,
   renderCompactStatus,
@@ -17,17 +16,19 @@ import {
   renderTabContent,
   renderTabLine,
 } from './tui-render.mjs';
-import { isPrintableKey, runLiveTui } from './tui-blessed.mjs';
+import { runLiveTui } from './tui-blessed.mjs';
 import {
-  acceptSlashSelection,
   closeSlashMenu,
-  completeSlashSelection,
-  deleteComposerText,
   insertComposerText,
   safeBuildSlashCommandCatalog,
   updateSlashState,
 } from './tui-actions.mjs';
 import { submitTuiText } from './tui-submit.mjs';
+import {
+  handleComposerKey,
+  handlePaletteKey,
+  handleSlashMenuKey,
+} from './tui-keys.mjs';
 
 export async function runTuiInteractive(parsed, initialInput = '') {
   const session = createInteractiveSession(parsed, { silent: true });
@@ -119,58 +120,8 @@ export async function handleTuiKey(model, session, key = {}) {
     return;
   }
 
-  if (isPrintableKey(key)) {
-    insertComposerText(model, key.sequence);
-    return;
-  }
-
-  if (key.name === 'backspace' || key.name === 'delete') {
-    deleteComposerText(model, key.name);
-    return;
-  }
-
-  if (key.name === 'left') {
-    model.composerCursor = Math.max(0, model.composerCursor - 1);
-    return;
-  }
-
-  if (key.name === 'right') {
-    model.composerCursor = Math.min(model.composer.length, model.composerCursor + 1);
-    return;
-  }
-
-  if (key.name === 'home') {
-    model.composerCursor = 0;
-    return;
-  }
-
-  if (key.name === 'end') {
-    model.composerCursor = model.composer.length;
-    return;
-  }
-
-  if (model.slashOpen) {
-    if (key.name === 'escape') {
-      closeSlashMenu(model);
-      return;
-    }
-    if (key.name === 'down') {
-      model.slashIndex = (model.slashIndex + 1) % Math.max(1, model.slashMatches.length);
-      return;
-    }
-    if (key.name === 'up') {
-      model.slashIndex = (model.slashIndex + Math.max(1, model.slashMatches.length) - 1) % Math.max(1, model.slashMatches.length);
-      return;
-    }
-    if (key.name === 'tab') {
-      completeSlashSelection(model);
-      return;
-    }
-    if (key.name === 'enter') {
-      await acceptSlashSelection(model, session);
-      return;
-    }
-  }
+  if (handleComposerKey(model, key)) return;
+  if (model.slashOpen && await handleSlashMenuKey(model, session, key)) return;
 
   if (key.name === 'tab') {
     const index = TABS.indexOf(model.activeTab);
@@ -189,22 +140,7 @@ export async function handleTuiKey(model, session, key = {}) {
     return;
   }
 
-  if (model.paletteOpen && key.name === 'enter') {
-    const [, command] = PALETTE_ACTIONS[model.paletteIndex ?? 0] ?? PALETTE_ACTIONS[0];
-    model.paletteOpen = false;
-    await submitTuiText(model, session, command);
-    return;
-  }
-
-  if (model.paletteOpen && key.name === 'down') {
-    model.paletteIndex = (model.paletteIndex + 1) % PALETTE_ACTIONS.length;
-    return;
-  }
-
-  if (model.paletteOpen && key.name === 'up') {
-    model.paletteIndex = (model.paletteIndex + PALETTE_ACTIONS.length - 1) % PALETTE_ACTIONS.length;
-    return;
-  }
+  if (model.paletteOpen && await handlePaletteKey(model, session, key)) return;
 
   if (key.ctrl && key.name === 'n') {
     await submitTuiText(model, session, '/new');

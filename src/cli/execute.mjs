@@ -1,33 +1,24 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { BUILTIN_TOOLS } from '../constants.mjs';
 import { estimateUsage, fixtureAgentResponse } from '../agent/fixture.mjs';
-import {
-  listActiveMcpServerEntries,
-} from '../mcp/discover.mjs';
-import { discoverMcpToolRows } from '../mcp/probe.mjs';
 import {
   loadPlugins,
   runPluginEventHandlers,
 } from '../plugins/discover.mjs';
 import { discoverAgentFiles, firstGuidanceInDir } from '../commands/agents.mjs';
-import {
-  isToolDisabled,
-  listToolboxTools,
-  toolKindForName,
-} from '../tools/toolbox.mjs';
 import { executePromptToolRequest } from '../tools/builtin/index.mjs';
 import { toolResultContent } from '../tools/builtin/runtime.mjs';
 import { persistThreadMessages, threadContinuationPrompt } from '../threads/store.mjs';
 import { readEffectiveSettings } from '../settings/load.mjs';
 import { expandFileReferences, expandThreadReferences } from './refs.mjs';
 import { UsageError } from './parse.mjs';
-import { reasoningEffortForMode } from './reasoning.mjs';
 import { notifyAgentComplete } from './notifications.mjs';
 import { globToRegex } from '../util/glob.mjs';
-import { displayCwd, emitJson } from '../util/fs.mjs';
+import { emitJson } from '../util/fs.mjs';
 import {
+  emitStreamJsonInit,
+  emitStreamJsonTurn,
   streamJsonInputMessages,
   streamJsonOutputUserContent,
   streamJsonPermissionDenials,
@@ -60,83 +51,21 @@ export async function runExecute(parsed, stdin, options = {}) {
   const result = turns.at(-1)?.result ?? '';
 
   if (parsed.streamJson) {
-    const activeMcpServers = listActiveMcpServerEntries(parsed, turns.map((turn) => turn.prompt).join('\n\n'));
-    const tools = [
-      ...BUILTIN_TOOLS.map(([name]) => name),
-      ...listToolboxTools(parsed).map((tool) => tool.name),
-      ...plugins.tools.map((tool) => tool.name),
-      ...(await discoverMcpToolRows(activeMcpServers)).map(([name]) => name),
-    ].filter((name) => !isToolDisabled(name, toolKindForName(name), parsed));
-    emitJson({
-      type: 'system',
-      subtype: 'init',
-      cwd: displayCwd(),
-      session_id: sessionId,
-      tools,
-      mcp_servers: activeMcpServers.map(({ name }) => ({ name, status: 'connected' })),
-      agent_mode: parsed.mode,
-      reasoning_effort: reasoningEffortForMode(parsed.mode, parsed.reasoningEffort),
+    await emitStreamJsonInit({
+      parsed,
+      plugins,
+      sessionId,
+      promptForMcpDiscovery: turns.map((turn) => turn.prompt).join('\n\n'),
     });
     for (const turn of turns) {
-      emitJson({
-        type: 'user',
-        message: { role: 'user', content: [{ type: 'text', text: turn.prompt }] },
-        parent_tool_use_id: null,
-        session_id: sessionId,
-      });
-      if (turn.toolRun?.toolUse) {
-        emitJson({
-          type: 'assistant',
-          message: {
-            type: 'message',
-            role: 'assistant',
-            content: [turn.toolRun.toolUse],
-            stop_reason: 'tool_use',
-            usage: estimateUsage(turn.prompt, JSON.stringify(turn.toolRun.toolUse.input)),
-          },
-          parent_tool_use_id: null,
-          session_id: sessionId,
-        });
-        for (const subagentMessage of turn.toolRun.subagentMessages ?? []) {
-          emitJson({
-            type: 'assistant',
-            message: {
-              type: 'message',
-              role: 'assistant',
-              content: assistantStreamContent(subagentMessage.text ?? '', parsed),
-              stop_reason: 'end_turn',
-              usage: estimateUsage(turn.prompt, subagentMessage.text ?? ''),
-            },
-            parent_tool_use_id: turn.toolRun.toolUse.id,
-            session_id: sessionId,
-          });
-        }
-        emitJson({
-          type: 'user',
-          message: {
-            role: 'user',
-            content: [{
-              type: 'tool_result',
-              tool_use_id: turn.toolRun.toolUse.id,
-              content: toolResultContent(turn.toolRun),
-              is_error: turn.toolRun.exitCode !== 0,
-            }],
-          },
-          parent_tool_use_id: toolRunParent(turn.toolRun, 'toolResultParentToolUseId', null),
-          session_id: sessionId,
-        });
-      }
-      emitJson({
-        type: 'assistant',
-        message: {
-          type: 'message',
-          role: 'assistant',
-          content: assistantStreamContent(turn.result, parsed),
-          stop_reason: 'end_turn',
-          usage: estimateUsage(turn.prompt, turn.result),
-        },
-        parent_tool_use_id: turn.toolRun ? toolRunParent(turn.toolRun, 'finalParentToolUseId', null) : null,
-        session_id: sessionId,
+      emitStreamJsonTurn({
+        userContent: [{ type: 'text', text: turn.prompt }],
+        promptText: turn.prompt,
+        toolRun: turn.toolRun,
+        result: turn.result,
+        parsed,
+        sessionId,
+        assistantParentToolUseId: turn.toolRun ? toolRunParent(turn.toolRun, 'finalParentToolUseId', null) : null,
       });
     }
     emitJson(streamJsonResultMessage({
@@ -312,22 +241,11 @@ async function runStreamJsonInputExecute(parsed, stdin, options = {}, started = 
   const combinedPrompt = inputMessages.map((message) => message.text).filter(Boolean).join('\n\n');
   const plugins = await loadPlugins(process.cwd());
   await runSessionStartHandlers(plugins, sessionId);
-  const activeMcpServers = listActiveMcpServerEntries(parsed, combinedPrompt);
-  const tools = [
-    ...BUILTIN_TOOLS.map(([name]) => name),
-    ...listToolboxTools(parsed).map((tool) => tool.name),
-    ...plugins.tools.map((tool) => tool.name),
-    ...(await discoverMcpToolRows(activeMcpServers)).map(([name]) => name),
-  ].filter((name) => !isToolDisabled(name, toolKindForName(name), parsed));
-  emitJson({
-    type: 'system',
-    subtype: 'init',
-    cwd: displayCwd(),
-    session_id: sessionId,
-    tools,
-    mcp_servers: activeMcpServers.map(({ name }) => ({ name, status: 'connected' })),
-    agent_mode: parsed.mode,
-    reasoning_effort: reasoningEffortForMode(parsed.mode, parsed.reasoningEffort),
+  await emitStreamJsonInit({
+    parsed,
+    plugins,
+    sessionId,
+    promptForMcpDiscovery: combinedPrompt,
   });
 
   const transcript = [];
@@ -356,67 +274,18 @@ async function runStreamJsonInputExecute(parsed, stdin, options = {}, started = 
     if (toolRun?.permissionDenials) permissionDenials.push(...toolRun.permissionDenials);
     if ((toolRun?.exitCode ?? 0) !== 0) isError = true;
 
-    emitJson({
-      type: 'user',
-      ...(input.steer ? { steer: true } : {}),
-      message: { role: 'user', content: streamJsonOutputUserContent(input.content) },
-      parent_tool_use_id: null,
-      session_id: sessionId,
-    });
     if (toolRun?.toolUse) {
-      emitJson({
-        type: 'assistant',
-        message: {
-          type: 'message',
-          role: 'assistant',
-          content: [toolRun.toolUse],
-          stop_reason: 'tool_use',
-          usage: estimateUsage(input.text, JSON.stringify(toolRun.toolUse.input)),
-        },
-        parent_tool_use_id: null,
-        session_id: sessionId,
-      });
-      for (const subagentMessage of toolRun.subagentMessages ?? []) {
-        emitJson({
-          type: 'assistant',
-          message: {
-            type: 'message',
-            role: 'assistant',
-            content: assistantStreamContent(subagentMessage.text ?? '', parsed),
-            stop_reason: 'end_turn',
-            usage: estimateUsage(input.text, subagentMessage.text ?? ''),
-          },
-          parent_tool_use_id: toolRun.toolUse.id,
-          session_id: sessionId,
-        });
-      }
-      emitJson({
-        type: 'user',
-        message: {
-          role: 'user',
-          content: [{
-            type: 'tool_result',
-            tool_use_id: toolRun.toolUse.id,
-            content: toolResultContent(toolRun),
-            is_error: toolRun.exitCode !== 0,
-          }],
-        },
-        parent_tool_use_id: toolRunParent(toolRun, 'toolResultParentToolUseId', null),
-        session_id: sessionId,
-      });
       parentToolUseId = toolRunParent(toolRun, 'finalParentToolUseId', null);
     }
-    emitJson({
-      type: 'assistant',
-      message: {
-        type: 'message',
-        role: 'assistant',
-        content: assistantStreamContent(result, parsed),
-        stop_reason: 'end_turn',
-        usage: estimateUsage(input.text, result),
-      },
-      parent_tool_use_id: parentToolUseId,
-      session_id: sessionId,
+    emitStreamJsonTurn({
+      userContent: streamJsonOutputUserContent(input.content),
+      steer: input.steer,
+      promptText: input.text,
+      toolRun,
+      result,
+      parsed,
+      sessionId,
+      assistantParentToolUseId: parentToolUseId,
     });
     await runPluginEventHandlers(plugins.handlers['agent.end'], {
       message: input.text,
@@ -451,13 +320,6 @@ async function runSessionStartHandlers(plugins, sessionId) {
   await runPluginEventHandlers(plugins.handlers['session.start'], {
     thread: { id: sessionId },
   });
-}
-
-function assistantStreamContent(result, parsed = {}) {
-  if (parsed.streamJsonThinking && readEffectiveSettings(parsed)['covenCode.thinking.enabled'] !== false) {
-    return [{ type: 'thinking', thinking: 'Using the local deterministic recreation.' }, { type: 'text', text: result }];
-  }
-  return [{ type: 'text', text: result }];
 }
 
 function modelPromptWithTranscript(turnPrompt, transcript, thread, parsed = {}) {

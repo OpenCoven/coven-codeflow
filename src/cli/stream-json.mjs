@@ -1,6 +1,15 @@
 import { fileURLToPath } from 'node:url';
+import { BUILTIN_TOOLS } from '../constants.mjs';
+import { estimateUsage } from '../agent/fixture.mjs';
+import { listActiveMcpServerEntries } from '../mcp/discover.mjs';
+import { discoverMcpToolRows } from '../mcp/probe.mjs';
+import { readEffectiveSettings } from '../settings/load.mjs';
+import { isToolDisabled, listToolboxTools, toolKindForName } from '../tools/toolbox.mjs';
+import { toolResultContent } from '../tools/builtin/runtime.mjs';
 import { detectImageMediaType, imageMediaTypeExtension } from '../util/media.mjs';
+import { displayCwd, emitJson } from '../util/fs.mjs';
 import { UsageError } from './parse.mjs';
+import { reasoningEffortForMode } from './reasoning.mjs';
 import { imageMentionBlock } from './refs.mjs';
 
 export function streamJsonInputMessages(prompt, stdin) {
@@ -87,6 +96,106 @@ export function streamJsonPermissionDenials(denials = []) {
     if (typeof denial === 'string') return denial;
     const reason = denial.reason ? ` (${denial.reason})` : '';
     return `${denial.tool}: ${denial.action}${reason}`;
+  });
+}
+
+export function assistantStreamContent(result, parsed = {}) {
+  if (parsed.streamJsonThinking && readEffectiveSettings(parsed)['covenCode.thinking.enabled'] !== false) {
+    return [{ type: 'thinking', thinking: 'Using the local deterministic recreation.' }, { type: 'text', text: result }];
+  }
+  return [{ type: 'text', text: result }];
+}
+
+export async function emitStreamJsonInit({ parsed, plugins, sessionId, promptForMcpDiscovery }) {
+  const activeMcpServers = listActiveMcpServerEntries(parsed, promptForMcpDiscovery);
+  const tools = [
+    ...BUILTIN_TOOLS.map(([name]) => name),
+    ...listToolboxTools(parsed).map((tool) => tool.name),
+    ...plugins.tools.map((tool) => tool.name),
+    ...(await discoverMcpToolRows(activeMcpServers)).map(([name]) => name),
+  ].filter((name) => !isToolDisabled(name, toolKindForName(name), parsed));
+  emitJson({
+    type: 'system',
+    subtype: 'init',
+    cwd: displayCwd(),
+    session_id: sessionId,
+    tools,
+    mcp_servers: activeMcpServers.map(({ name }) => ({ name, status: 'connected' })),
+    agent_mode: parsed.mode,
+    reasoning_effort: reasoningEffortForMode(parsed.mode, parsed.reasoningEffort),
+  });
+}
+
+export function emitStreamJsonTurn({
+  userContent,
+  steer = false,
+  promptText,
+  toolRun,
+  result,
+  parsed,
+  sessionId,
+  assistantParentToolUseId,
+}) {
+  emitJson({
+    type: 'user',
+    ...(steer ? { steer: true } : {}),
+    message: { role: 'user', content: userContent },
+    parent_tool_use_id: null,
+    session_id: sessionId,
+  });
+  if (toolRun?.toolUse) {
+    emitJson({
+      type: 'assistant',
+      message: {
+        type: 'message',
+        role: 'assistant',
+        content: [toolRun.toolUse],
+        stop_reason: 'tool_use',
+        usage: estimateUsage(promptText, JSON.stringify(toolRun.toolUse.input)),
+      },
+      parent_tool_use_id: null,
+      session_id: sessionId,
+    });
+    for (const subagentMessage of toolRun.subagentMessages ?? []) {
+      emitJson({
+        type: 'assistant',
+        message: {
+          type: 'message',
+          role: 'assistant',
+          content: assistantStreamContent(subagentMessage.text ?? '', parsed),
+          stop_reason: 'end_turn',
+          usage: estimateUsage(promptText, subagentMessage.text ?? ''),
+        },
+        parent_tool_use_id: toolRun.toolUse.id,
+        session_id: sessionId,
+      });
+    }
+    emitJson({
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [{
+          type: 'tool_result',
+          tool_use_id: toolRun.toolUse.id,
+          content: toolResultContent(toolRun),
+          is_error: toolRun.exitCode !== 0,
+        }],
+      },
+      parent_tool_use_id: toolRunParent(toolRun, 'toolResultParentToolUseId', null),
+      session_id: sessionId,
+    });
+  }
+  emitJson({
+    type: 'assistant',
+    message: {
+      type: 'message',
+      role: 'assistant',
+      content: assistantStreamContent(result, parsed),
+      stop_reason: 'end_turn',
+      usage: estimateUsage(promptText, result),
+    },
+    parent_tool_use_id: assistantParentToolUseId,
+    session_id: sessionId,
   });
 }
 

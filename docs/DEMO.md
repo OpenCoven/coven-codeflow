@@ -18,9 +18,13 @@ You are driving this demo for the user. Follow these rules:
 1. **Prefer the script over ad-hoc commands.** If the user says "run the
    demo" with no qualifier, run `npm run demo` once end-to-end and
    report results. Do not improvise commands that drift from what is
-   documented here. The script is interactive by default but
-   auto-advances when stdin is not a TTY, so invoking it from an agent
-   subprocess will not hang — it runs straight through.
+   documented here. The script opens a menu by default but
+   auto-advances through every section when stdin is not a TTY, so
+   invoking it from an agent subprocess will not hang — it runs
+   straight through. To request only one section non-interactively,
+   the user can run `npm run demo` with input like `5\nq\n` piped in,
+   but the easier path is just `npm run demo -- --auto` for the full
+   walk.
 
 2. **Walk the sections in order if asked to narrate.** When the user
    asks for a guided walkthrough, run each section's commands in the
@@ -76,22 +80,36 @@ npm run demo
 ```
 
 This invokes `bash ./scripts/demo.sh`. The script opens with a
-welcome banner that lists all 12 sections and the sandboxed HOME it
-will use, then walks the surface in order. Each section starts with a
-short narration explaining what it proves, runs its commands (the
-literal shell line is shown in magenta before the output), and closes
-with a green `✓ proved: ...` payoff line. Between sections it pauses
-on a prompt like `─── §3/12 done · Enter next: §4 Stream JSON · q quit ───`
-so the operator can narrate and the audience can keep up. After the
-final section the script prints a scoreboard summarizing what was
-demonstrated.
+welcome banner listing the 12 sections and the sandboxed HOME it will
+use, then drops into an interactive menu so the operator picks what
+to see — no cognitive overload from a 12-section wall of output.
 
-Press `Enter` to advance, or `q` then `Enter` to quit cleanly at any
-point. Direct invocation (`bash scripts/demo.sh`) works identically
+The menu accepts:
+
+| Input    | Action                                                   |
+| -------- | -------------------------------------------------------- |
+| `1`-`12` | run one section by number                                |
+| `a`      | run all sections in sequence, then print the scoreboard  |
+| `t`      | type your own prompt and run one execute turn            |
+| `s`      | list the files the demo wrote into the sandbox HOME      |
+| `l`      | re-print the section table of contents (with `✓` marks)  |
+| `?`      | show the menu help                                       |
+| `q`      | quit (sandbox path printed so you can clean up or poke around) |
+
+Each section starts with a short narration explaining what it proves,
+runs its commands (the literal `coven-code …` shell line is printed in
+magenta before each output), and closes with a green `✓ proved: …`
+payoff and a `↳ see also:` pointer to the relevant doc. After every
+section the menu re-displays the running counter (`3 / 12 sections
+seen`) so the audience always knows where they are.
+
+The menu reads input via `read -e` so backspace, arrow keys, and line
+history work in any terminal that supports readline — including agent
+shells. Direct invocation (`bash scripts/demo.sh`) works identically
 if `npm` is unavailable.
 
-To skip the per-section pause and run straight through (for example
-when showing the demo to yourself or capturing a transcript):
+To skip the menu and run every section straight through (for example
+when capturing a transcript or showing the demo to yourself):
 
 ```sh
 npm run demo -- --auto             # explicit flag

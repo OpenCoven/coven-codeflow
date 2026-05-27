@@ -42,16 +42,16 @@ export function parseGlobalArgs(args) {
     } else if (arg === '--stream-json-input') parsed.streamJsonInput = true;
     else if (arg === '--dangerously-allow-all') parsed.dangerouslyAllowAll = true;
     else if (arg === '--mcp-config') {
-      parsed.mcpConfig = args[index + 1] ?? '';
+      parsed.mcpConfig = requireFlagValue(args, index, arg);
       index += 1;
     } else if (arg === '--settings-file') {
-      parsed.settingsFile = args[index + 1] ?? '';
+      parsed.settingsFile = requireFlagValue(args, index, arg);
       index += 1;
     } else if (arg === '--label') {
-      parsed.labels.push(args[index + 1] ?? '');
+      parsed.labels.push(requireFlagValue(args, index, arg));
       index += 1;
     } else if (arg === '--visibility') {
-      parsed.visibility = args[index + 1] ?? '';
+      parsed.visibility = requireFlagValue(args, index, arg);
       index += 1;
     } else if (arg === '--archive') {
       parsed.archive = true;
@@ -64,20 +64,26 @@ export function parseGlobalArgs(args) {
         parsed.continueThread = true;
       }
     } else if (arg === '--toolbox') {
-      parsed.toolbox = args[index + 1] ?? '';
+      parsed.toolbox = requireFlagValue(args, index, arg);
       index += 1;
     } else if (arg === '--skills') {
-      parsed.skills = args[index + 1] ?? '';
+      parsed.skills = requireFlagValue(args, index, arg);
       index += 1;
     } else if (arg === '--mode') {
-      parsed.mode = args[index + 1] ?? parsed.mode;
+      parsed.mode = requireFlagValue(args, index, arg);
       index += 1;
     } else if (arg === '--reasoning-effort') {
-      parsed.reasoningEffort = args[index + 1] ?? '';
+      parsed.reasoningEffort = requireFlagValue(args, index, arg);
       index += 1;
     } else if (arg === '--jetbrains') parsed.ide = 'jetbrains';
     else parsed.positionals.push(arg);
   }
 
   return parsed;
+}
+
+function requireFlagValue(args, index, flag) {
+  const next = args[index + 1];
+  if (next === undefined) throw new UsageError(`${flag} requires a value`);
+  return next;
 }

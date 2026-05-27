@@ -93,6 +93,7 @@ async function runMcpOauth(args) {
   if (subcommand === 'logout') {
     const name = args[1];
     if (!name) throw new UsageError('mcp oauth logout requires a server name');
+    validateMcpServerName(name);
     await rm(mcpOauthCredentialFile(name), { force: true });
     console.log(`Removed OAuth credentials for ${name}.`);
     return;
@@ -104,6 +105,7 @@ async function runMcpOauth(args) {
 function parseMcpOauthLoginArgs(args) {
   const name = args[0];
   if (!name || name.startsWith('-')) throw new UsageError('mcp oauth login requires a server name');
+  validateMcpServerName(name);
   const flags = parseFlagPairs(args.slice(1));
   const serverUrl = flags.get('server-url') ?? flags.get('serverUrl');
   const clientId = flags.get('client-id') ?? flags.get('clientId');
@@ -137,6 +139,12 @@ function splitScopes(value) {
 
 function mcpOauthCredentialFile(name) {
   return path.join(os.homedir(), '.coven-code', 'oauth', `${name}.json`);
+}
+
+function validateMcpServerName(name) {
+  if (!/^[A-Za-z0-9_.-]+$/.test(name) || name === '.' || name === '..') {
+    throw new UsageError(`mcp oauth server name must match [A-Za-z0-9_.-]+: ${name}`);
+  }
 }
 
 function parseMcpServerSpec(args) {

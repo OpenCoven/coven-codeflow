@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { chmod, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { UsageError } from '../cli/parse.mjs';
 import { configDir } from '../settings/paths.mjs';
@@ -53,9 +53,8 @@ function printLoginStatus() {
 
 async function writeAuth(auth) {
   const filePath = authFile();
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(auth, null, 2)}\n`, 'utf8');
-  await chmod(filePath, 0o600);
+  await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  await writeFile(filePath, `${JSON.stringify(auth, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
 }
 
 function readAuth() {

@@ -26,9 +26,12 @@ export async function writeSettings(settings, parsed = {}) {
 
 export function readSettingsFile(filePath) {
   if (!filePath || !existsSync(filePath)) return {};
+  const text = readFileSync(filePath, 'utf8');
+  if (!text.trim()) return {};
   try {
-    return parseJsonc(readFileSync(filePath, 'utf8'));
-  } catch {
+    return parseJsonc(text);
+  } catch (error) {
+    console.error(`coven-code: settings file ${filePath} is invalid JSON, using defaults: ${error?.message ?? error}`);
     return {};
   }
 }

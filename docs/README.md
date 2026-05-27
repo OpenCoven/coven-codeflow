@@ -13,6 +13,7 @@ as a harness for OpenCoven integration work, local demos, and regression tests.
 - [SDK](SDK.md)
 - [Development](DEVELOPMENT.md)
 - [Coven Dogfood Protocol](DOGFOOD-PROTOCOL.md)
+- [Demo](DEMO.md)
 
 ## Core Ideas
 

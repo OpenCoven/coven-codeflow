@@ -25,9 +25,9 @@ import {
   deleteComposerText,
   insertComposerText,
   safeBuildSlashCommandCatalog,
-  submitTuiText,
   updateSlashState,
 } from './tui-actions.mjs';
+import { submitTuiText } from './tui-submit.mjs';
 
 export async function runTuiInteractive(parsed, initialInput = '') {
   const session = createInteractiveSession(parsed, { silent: true });

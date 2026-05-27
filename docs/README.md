@@ -12,7 +12,7 @@ as a harness for OpenCoven integration work, local demos, and regression tests.
 - [MCP, skills, and plugins](MCP-SKILLS-PLUGINS.md)
 - [SDK](SDK.md)
 - [Development](DEVELOPMENT.md)
-- [Coven dogfood protocol](DOGFOOD-PROTOCOL.md)
+- [Coven Dogfood Protocol](DOGFOOD-PROTOCOL.md)
 
 ## Core Ideas
 

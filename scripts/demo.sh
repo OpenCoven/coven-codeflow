@@ -166,12 +166,6 @@ for _ in "${SECTION_TAGS[@]}"; do SECTIONS_RUN_FLAGS+=(0); done
 
 # ---- UI helpers --------------------------------------------------------------
 
-# Provide real `coven-code` and `coven-code-sdk` functions so `eval`'d
-# snippets (used by `raw` for pipes and redirects) read like the docs.
-coven-code() { node "$CLI" "$@"; }
-coven-code-sdk() { node "$SDK_BIN" "$@"; }
-export -f coven-code coven-code-sdk
-
 cc() {
   printf '\n%s$%s coven-code %s\n' "$C_MAGENTA" "$C_RESET" "$*"
   node "$CLI" "$@"
@@ -180,9 +174,8 @@ csdk() {
   printf '\n%s$%s coven-code-sdk %s\n' "$C_MAGENTA" "$C_RESET" "$*"
   node "$SDK_BIN" "$@"
 }
-raw() {
+raw_print() {
   printf '\n%s$%s %s\n' "$C_MAGENTA" "$C_RESET" "$1"
-  eval "$1"
 }
 
 CURRENT_SECTION=0
@@ -251,7 +244,8 @@ Coven Code demo file used to show @file context references.
 EOF
   cc -x "summarize @sample.md"
 
-  raw "printf 'extra context from stdin\n' | coven-code -x \"answer using the piped context\""
+  raw_print 'printf "extra context from stdin\n" | coven-code -x "answer using the piped context"'
+  printf 'extra context from stdin\n' | node "$CLI" -x "answer using the piped context"
   proved "execute mode answered 4 prompts (basic, with mode flags, with @file, with stdin)."
   seealso "docs/CLI.md#execute-mode"
 }
@@ -297,7 +291,8 @@ section_stream_json() {
 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"first turn from JSONL"}]}}
 {"type":"user","message":{"role":"user","content":[{"type":"text","text":"second turn from JSONL"}]}}
 EOF
-  raw "coven-code -x 'kickoff' --stream-json --stream-json-input < messages.jsonl"
+  raw_print "coven-code -x 'kickoff' --stream-json --stream-json-input < messages.jsonl"
+  node "$CLI" -x 'kickoff' --stream-json --stream-json-input < messages.jsonl
   proved "JSONL stream with init, user, assistant, thinking, and result events."
   seealso "docs/CLI.md#stream-json"
 }
@@ -415,7 +410,8 @@ EOF
   cc plugins list
   cc plugins reload
   cc tools list
-  raw 'coven-code -x "list available tools" --stream-json | head -1   # init message = agent runtime catalog'
+  raw_print 'coven-code -x "list available tools" --stream-json | head -1   # init message = agent runtime catalog'
+  node "$CLI" -x "list available tools" --stream-json | head -1
 
   printf '\n  %s┌─ THE PROOF ────────────────────────────────────────┐%s\n' "$C_GREEN$C_BOLD" "$C_RESET"
   printf '  %s│%s  In one init message the agent runtime sees:       %s│%s\n' "$C_GREEN$C_BOLD" "$C_RESET" "$C_GREEN$C_BOLD" "$C_RESET"
@@ -452,7 +448,8 @@ for await (const message of execute({ prompt: 'demonstrate the SDK path' })) {
   }
 }
 EOF
-  raw "node sdk-demo.mjs"
+  raw_print "node sdk-demo.mjs"
+  node sdk-demo.mjs
   proved "SDK created a thread and streamed assistant + result events from JS."
   seealso "docs/SDK.md"
 }

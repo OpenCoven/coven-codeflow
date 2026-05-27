@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { globMatch } from '../util/glob.mjs';
@@ -304,7 +304,9 @@ async function refreshMcpOauthToken(serverName = '', config = {}) {
     refreshToken: token.refresh_token ?? token.refreshToken ?? credential.refreshToken,
     ...(token.expires_in || token.expiresIn ? { expiresAt: Date.now() + Number(token.expires_in ?? token.expiresIn) * 1000 } : {}),
   };
-  writeFileSync(mcpOauthCredentialPath(serverName), `${JSON.stringify(nextCredential, null, 2)}\n`);
+  const credentialPath = mcpOauthCredentialPath(serverName);
+  mkdirSync(path.dirname(credentialPath), { recursive: true, mode: 0o700 });
+  writeFileSync(credentialPath, `${JSON.stringify(nextCredential, null, 2)}\n`, { mode: 0o600 });
   return Boolean(nextCredential.accessToken);
 }
 

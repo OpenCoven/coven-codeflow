@@ -404,18 +404,15 @@ function createPluginConfigurationApi(cwd, runtime) {
     },
     async delete(key, scope = 'workspace') {
       const normalizedKey = normalizePluginConfigurationKey(key);
-      const alternateKey = alternatePluginConfigurationKey(normalizedKey);
       const target = normalizePluginConfigurationTarget(scope);
       if (target === 'workspace') {
         const filePath = workspaceSettingsFile(findProjectRoot(cwd));
         const settings = readSettingsFile(filePath);
         delete settings[normalizedKey];
-        delete settings[alternateKey];
         await writeSettingsFile(filePath, settings);
       } else {
         const settings = readSettings();
         delete settings[normalizedKey];
-        delete settings[alternateKey];
         await writeSettings(settings);
       }
       await notifyConfigurationSubscribers(runtime);
@@ -464,10 +461,6 @@ function normalizePluginConfigurationKey(key) {
   const text = String(key);
   if (text.startsWith(SETTINGS_PREFIX)) return text;
   return `${SETTINGS_PREFIX}${text}`;
-}
-
-function alternatePluginConfigurationKey(key) {
-  return key;
 }
 
 function normalizePluginConfigurationTarget(target = 'workspace') {

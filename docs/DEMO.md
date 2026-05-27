@@ -147,7 +147,7 @@ rm -rf "$DEMO_HOME"   # the script prints the exact path at the end
 works without any account or API key.
 
 ```sh
-node ./bin/coven-code.mjs --version       # prints 0.0.3
+node ./bin/coven-code.mjs --version       # prints 0.0.4
 node ./bin/coven-code.mjs --help          # full option and command reference
 node ./bin/coven-code.mjs login           # printable instructions (no token yet)
 node ./bin/coven-code.mjs login status    # auth_status: logged_out

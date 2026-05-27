@@ -34,7 +34,7 @@ filtering and a details panel for commands, skills, and plugin actions.
 
 ```text
 $ coven-code
-Coven Code 0.0.1
+Coven Code 0.0.2
 /Users/example/project
 [chat]  lane   tools   threads   config   help    mode: smart   effort: high
 --------------------------------------------------------------------------------

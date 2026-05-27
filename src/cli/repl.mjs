@@ -5,7 +5,6 @@ import {
   createInteractiveSession,
   handleInteractiveInput,
   loadReplHistory,
-  printSlashHelp,
 } from './interactive-core.mjs';
 
 export async function runInteractive(parsed, initialInput = '') {
@@ -47,8 +46,7 @@ export async function runInteractive(parsed, initialInput = '') {
         continue;
       }
       const result = await handleInteractiveInput(session, text);
-      if (result.kind === 'help') printSlashHelp();
-      else if (result.lines.length > 0) {
+      if (result.lines.length > 0) {
         for (const outputLine of result.lines) {
           if (result.kind === 'error') console.error(outputLine);
           else console.log(outputLine);

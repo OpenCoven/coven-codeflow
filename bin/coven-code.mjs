@@ -6,6 +6,7 @@ process.stdout.on('error', (error) => {
   if (error?.code === 'EPIPE') process.exit(0);
   throw error;
 });
+process.on('SIGPIPE', () => process.exit(0));
 
 main().catch((error) => {
   if (error instanceof UsageError) {

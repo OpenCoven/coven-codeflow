@@ -14,11 +14,19 @@ import {
   nextReasoningEffortForMode,
   reasoningEffortForMode,
 } from './reasoning.mjs';
+import {
+  buildSlashCommandCatalog,
+  findSlashCommand,
+  formatSlashCommandDetails,
+  formatSlashHelpLines,
+  skillPromptFromSlashCommand,
+} from './slash-commands.mjs';
 
 export function createInteractiveSession(parsed, options = {}) {
   return {
     parsed,
     thread: options.thread,
+    cwd: options.cwd ?? process.cwd(),
     queuedMessages: [],
     commandRunner: options.commandRunner ?? runCommand,
     executeRunner: options.executeRunner ?? runExecute,
@@ -29,7 +37,7 @@ export function createInteractiveSession(parsed, options = {}) {
 export async function handleInteractiveInput(session, text) {
   if (!text) return { kind: 'empty', lines: [] };
   if (text === '/exit' || text === '/quit') return { kind: 'exit', lines: [] };
-  if (text === '/help') return { kind: 'help', lines: slashHelpLines() };
+  if (text === '/help') return { kind: 'help', lines: await sessionSlashHelpLines(session) };
   if (!text.startsWith('/')) {
     session.thread = await runInteractiveTurn(session.parsed, text, session.thread, session.executeRunner);
     while (session.queuedMessages.length > 0) {
@@ -40,7 +48,24 @@ export async function handleInteractiveInput(session, text) {
 
   const tokens = splitShellWords(text.slice(1));
   const [cmd, ...rest] = tokens;
-  if (!cmd) return { kind: 'empty', lines: [] };
+  const catalog = await safeSlashCommandCatalog(session);
+  if (!cmd) return { kind: 'help', lines: formatCatalogHelpLines(catalog) };
+  const catalogEntry = findSlashCommand(catalog, cmd);
+
+  if (catalogEntry?.source === 'skill') {
+    if (rest.length === 0) {
+      return { kind: 'command', lines: formatSlashCommandDetails(catalogEntry) };
+    }
+    await submitPromptAndQueue(session, skillPromptFromSlashCommand(catalogEntry, rest.join(' ')));
+    return { kind: 'turn', lines: [] };
+  }
+
+  if (catalogEntry?.source === 'plugin' && catalogEntry.availability?.type === 'disabled') {
+    return {
+      kind: 'error',
+      lines: [`${CLI_NAME}: ${catalogEntry.availability.reason ?? `Plugin command disabled: ${catalogEntry.name}`}`],
+    };
+  }
 
   if (cmd === 'mode') {
     const nextMode = rest[0];
@@ -84,7 +109,7 @@ export async function handleInteractiveInput(session, text) {
     }
   }
 
-  if (cmd === `${CLI_NAME}:` && rest.join(' ') === 'help') return { kind: 'help', lines: slashHelpLines() };
+  if (cmd === `${CLI_NAME}:` && rest.join(' ') === 'help') return { kind: 'help', lines: await sessionSlashHelpLines(session) };
 
   if (cmd === 'editor') {
     const edited = await session.editorReader();
@@ -166,45 +191,7 @@ async function submitPromptAndQueue(session, text) {
 }
 
 export function slashHelpLines() {
-  return [
-    'Slash commands:',
-    '  /exit, /quit          leave the REPL',
-    '  /help                 show this message',
-    `  /${CLI_NAME}: help`,
-    '                         show command-palette help',
-    '  /mode [name]          show or set mode: smart, deep, rush, large',
-    '  /reasoning [level|next]',
-    '                         show, set, or cycle reasoning effort',
-    '  /new                  start a fresh thread',
-    '  /continue [thread-id] continue the latest active thread or a specific thread',
-    '  /queue <prompt>       send a follow-up prompt after the next turn',
-    '  /lane refresh         TUI only: refresh worktree, branch, and diff state',
-    '  /lane verify          TUI only: run the lane verification command',
-    '  /editor               compose the next prompt in $EDITOR',
-    '  /edit                 edit the previous prompt in $EDITOR',
-    '  /ide connect          connect or inspect local IDE integration',
-    '  /skill: list          list installed skills',
-    '  /plugins: reload      reload project and user plugins',
-    '  /thread: archive and quit',
-    '                         archive the current thread and leave the REPL',
-    '  /thread: set visibility <level>',
-    '                         set current thread visibility',
-    '  /feedback: send report with diagnostics',
-    '                         create a diagnostic report for the current thread',
-    `  /<subcommand> [args]  run any top-level ${CLI_NAME} subcommand (e.g. /tools list)`,
-    'End a line with `\\` to continue the prompt onto the next line.',
-    'Anything else is sent as a one-turn prompt.',
-    '',
-    'Keybindings:',
-    '  Ctrl+O                open the command palette',
-    '  Ctrl+G                open the current prompt in $EDITOR',
-    '  Ctrl+S                switch agent modes',
-    '  Ctrl+R                search prompt history',
-    '  Up/Down               move through previous messages',
-    '  Alt+T                 expand thinking and tool blocks',
-    '  Alt+D                 cycle reasoning effort for the active mode',
-    '  @                     mention files',
-  ];
+  return formatSlashHelpLines();
 }
 
 export function printSlashHelp() {
@@ -293,4 +280,23 @@ export async function appendReplHistory(line) {
   } catch {
     // history must never break the REPL
   }
+}
+
+async function safeSlashCommandCatalog(session) {
+  try {
+    return await buildSlashCommandCatalog({
+      parsed: session.parsed,
+      cwd: session.cwd ?? process.cwd(),
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function sessionSlashHelpLines(session) {
+  return formatCatalogHelpLines(await safeSlashCommandCatalog(session));
+}
+
+function formatCatalogHelpLines(catalog) {
+  return catalog.length > 0 ? formatSlashHelpLines(catalog) : slashHelpLines();
 }

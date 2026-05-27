@@ -1,4 +1,10 @@
-export const VERSION = '0.0.0-recreate';
+import { readFileSync } from 'node:fs';
+
+const packageJson = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+);
+
+export const VERSION = packageJson.version;
 export const PRODUCT_NAME = 'Coven Code';
 export const CLI_NAME = 'coven-code';
 export const PACKAGE_NAME = '@opencoven/coven-code';

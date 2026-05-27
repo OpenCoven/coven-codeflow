@@ -35,7 +35,7 @@ transcript, tabs, compact status line, command palette, slash-command menu, and
 composer. It keeps a current local thread and accepts slash commands:
 
 ```text
-Coven Code 0.0.0-recreate
+Coven Code 0.0.1
 [chat]  lane   tools   threads   config   help    mode: smart   effort: high
 --------------------------------------------------------------------------------
 Ready. Type a prompt or /help.

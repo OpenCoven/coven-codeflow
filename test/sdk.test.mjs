@@ -17,6 +17,7 @@ import {
   runGit,
   escapeRegExp,
   expectAvailable,
+  version,
 } from './_helpers.mjs';
 
 test('SDK execute streams CLI messages and exposes user-message and permission helpers', async () => {
@@ -150,15 +151,15 @@ test('SDK package coven-code-sdk bin installs an SDK-managed coven-code command'
 
   const install = runCovenCodeSdk(['install', '--force'], { env: { HOME: home, COVEN_CODE_HOME: covenCodeHome } });
   assert.equal(install.status, 0, install.stderr);
-  assert.match(install.stdout, new RegExp(`Coven Code CLI ${escapeRegExp('0.0.0-recreate')} installed at `));
+  assert.match(install.stdout, new RegExp(`Coven Code CLI ${escapeRegExp(version)} installed at `));
 
   const installedCovenCode = path.join(covenCodeHome, 'sdk', 'bin', process.platform === 'win32' ? 'coven-code.cmd' : 'coven-code');
-  const version = spawnSync(installedCovenCode, ['--version'], {
+  const versionRun = spawnSync(installedCovenCode, ['--version'], {
     env: { ...process.env, HOME: home, COVEN_CODE_HOME: covenCodeHome },
     encoding: 'utf8',
   });
-  assert.equal(version.status, 0, version.stderr);
-  assert.equal(version.stdout.trim(), '0.0.0-recreate');
+  assert.equal(versionRun.status, 0, versionRun.stderr);
+  assert.equal(versionRun.stdout.trim(), version);
 });
 
 test('SDK package coven-code-sdk install reuses COVEN_CODE_CLI_PATH unless forced', async () => {
@@ -168,7 +169,7 @@ test('SDK package coven-code-sdk install reuses COVEN_CODE_CLI_PATH unless force
   const managedCovenCode = path.join(covenCodeHome, 'sdk', 'bin', process.platform === 'win32' ? 'coven-code.cmd' : 'coven-code');
   await writeFile(existingCovenCode, `#!/usr/bin/env node
 if (process.argv.includes('--version')) {
-  console.log('0.0.0-recreate');
+  console.log(${JSON.stringify(version)});
   process.exit(0);
 }
 console.log('existing coven-code');
@@ -179,7 +180,7 @@ console.log('existing coven-code');
     env: { HOME: home, COVEN_CODE_HOME: covenCodeHome, COVEN_CODE_CLI_PATH: existingCovenCode },
   });
   assert.equal(reused.status, 0, reused.stderr);
-  assert.match(reused.stdout, /Coven Code CLI 0\.0\.0-recreate already satisfies minimum 0\.0\.0-recreate \(COVEN_CODE_CLI_PATH\)\./);
+  assert.match(reused.stdout, new RegExp(`Coven Code CLI ${escapeRegExp(version)} already satisfies minimum ${escapeRegExp(version)} \\(COVEN_CODE_CLI_PATH\\)\\.`));
   await assert.rejects(readFile(managedCovenCode, 'utf8'), { code: 'ENOENT' });
 
   const forced = runCovenCodeSdk(['install', '--force'], {
@@ -187,7 +188,7 @@ console.log('existing coven-code');
   });
   assert.equal(forced.status, 0, forced.stderr);
   assert.match(forced.stdout, /Forcing SDK-managed install; skipping existing CLI detection\./);
-  assert.match(forced.stdout, /Coven Code CLI 0\.0\.0-recreate installed at /);
+  assert.match(forced.stdout, new RegExp(`Coven Code CLI ${escapeRegExp(version)} installed at `));
   assert.match(await readFile(managedCovenCode, 'utf8'), new RegExp(escapeRegExp(covenCodeBin)));
 });
 
@@ -206,7 +207,7 @@ test('SDK package coven-code-sdk install reuses local npm coven-code package bef
   }));
   await writeFile(localCovenCode, `#!/usr/bin/env node
 if (process.argv.includes('--version')) {
-  console.log('0.0.0-recreate');
+  console.log(${JSON.stringify(version)});
   process.exit(0);
 }
 console.log('local npm coven-code');
@@ -216,7 +217,7 @@ console.log('local npm coven-code');
   const reused = runCovenCodeSdk(['install'], { cwd: workspace, env: { HOME: home, COVEN_CODE_HOME: covenCodeHome } });
 
   assert.equal(reused.status, 0, reused.stderr);
-  assert.match(reused.stdout, /Coven Code CLI 0\.0\.0-recreate already satisfies minimum 0\.0\.0-recreate \(LOCAL_NPM\)\./);
+  assert.match(reused.stdout, new RegExp(`Coven Code CLI ${escapeRegExp(version)} already satisfies minimum ${escapeRegExp(version)} \\(LOCAL_NPM\\)\\.`));
   await assert.rejects(readFile(managedCovenCode, 'utf8'), { code: 'ENOENT' });
 });
 
@@ -229,7 +230,7 @@ test('SDK package coven-code-sdk install reuses COVEN_CODE_HOME bin before SDK-m
   await mkdir(homeBin, { recursive: true });
   await writeFile(homeCovenCode, `#!/usr/bin/env node
 if (process.argv.includes('--version')) {
-  console.log('0.0.0-recreate');
+  console.log(${JSON.stringify(version)});
   process.exit(0);
 }
 console.log('coven-code home cli');
@@ -239,7 +240,7 @@ console.log('coven-code home cli');
   const reused = runCovenCodeSdk(['install'], { env: { HOME: home, COVEN_CODE_HOME: covenCodeHome } });
 
   assert.equal(reused.status, 0, reused.stderr);
-  assert.match(reused.stdout, /Coven Code CLI 0\.0\.0-recreate already satisfies minimum 0\.0\.0-recreate \(COVEN_CODE_HOME\)\./);
+  assert.match(reused.stdout, new RegExp(`Coven Code CLI ${escapeRegExp(version)} already satisfies minimum ${escapeRegExp(version)} \\(COVEN_CODE_HOME\\)\\.`));
   await assert.rejects(readFile(managedCovenCode, 'utf8'), { code: 'ENOENT' });
 });
 
@@ -252,7 +253,7 @@ test('SDK package coven-code-sdk install reuses coven-code from PATH', async () 
   await mkdir(binDir, { recursive: true });
   await writeFile(pathCovenCode, `#!/usr/bin/env node
 if (process.argv.includes('--version')) {
-  console.log('0.0.0-recreate');
+  console.log(${JSON.stringify(version)});
   process.exit(0);
 }
 console.log('path coven-code cli');
@@ -268,7 +269,7 @@ console.log('path coven-code cli');
   });
 
   assert.equal(reused.status, 0, reused.stderr);
-  assert.match(reused.stdout, /Coven Code CLI 0\.0\.0-recreate already satisfies minimum 0\.0\.0-recreate \(PATH\)\./);
+  assert.match(reused.stdout, new RegExp(`Coven Code CLI ${escapeRegExp(version)} already satisfies minimum ${escapeRegExp(version)} \\(PATH\\)\\.`));
   await assert.rejects(readFile(managedCovenCode, 'utf8'), { code: 'ENOENT' });
 });
 

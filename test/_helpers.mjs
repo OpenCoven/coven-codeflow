@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -6,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 export const repoRoot = path.resolve(import.meta.dirname, '..');
 export const covenCodeBin = path.join(repoRoot, 'bin', 'coven-code.mjs');
 export const covenCodeSdkBin = path.join(repoRoot, 'bin', 'coven-code-sdk.mjs');
+export const version = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8')).version;
 
 export async function makeWorkspace() {
   const dir = await mkdtemp(path.join(tmpdir(), 'coven-code-recreate-'));

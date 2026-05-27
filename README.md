@@ -12,6 +12,7 @@ npm start
 npm run coven-code -- --help
 npm run coven-code -- -x "what is 2+2?"
 echo "list markdown files" | npm run coven-code
+npm run demo                # interactive end-to-end tour (or --auto for speed-run)
 ```
 
 The package exposes `coven-code` and `coven-code-sdk` bins.

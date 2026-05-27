@@ -163,8 +163,8 @@ export async function buildSlashCommandCatalog(options = {}) {
     const cwd = options.cwd ?? process.cwd();
     const entries = [
       ...buildStaticSlashCommandCatalog(),
-      ...skillSlashCommands(parsed, cwd),
-      ...await pluginSlashCommands(cwd),
+      ...safeSkillSlashCommands(parsed, cwd),
+      ...await safePluginSlashCommands(cwd),
     ];
     return normalizeCatalog(entries);
   } finally {
@@ -260,6 +260,24 @@ async function pluginSlashCommands(cwd) {
       availability: command.availability,
       pluginCommand: command,
     }));
+}
+
+function safeSkillSlashCommands(parsed, cwd) {
+  try {
+    return skillSlashCommands(parsed, cwd);
+  } catch (error) {
+    console.error(`${CLI_NAME}: skill catalog unavailable: ${error?.message ?? error}`);
+    return [];
+  }
+}
+
+async function safePluginSlashCommands(cwd) {
+  try {
+    return await pluginSlashCommands(cwd);
+  } catch (error) {
+    console.error(`${CLI_NAME}: plugin catalog unavailable: ${error?.message ?? error}`);
+    return [];
+  }
 }
 
 function normalizeCatalog(entries) {

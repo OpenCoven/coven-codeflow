@@ -26,8 +26,9 @@ Store dogfood packets where future maintainers can find the proof.
   retrospective, and issue capture in the relevant issue, PR comment, or review
   thread.
 - For local or non-GitHub work, put the record in a dated local dogfood log or
-  Coven session artifact. Use `.local/dogfood/YYYY-MM-DD.md` when the repo
-  permits local-only artifacts.
+  Coven session artifact. Use `.local/dogfood/YYYY-MM-DD.md` only when `.local/`
+  is ignored (for example via `.git/info/exclude` or a global gitignore), so the
+  log cannot be committed by accident.
 - For sensitive or internal-only context, keep a minimal public summary in the
   normal artifact and store the sensitive detail in private memory or private
   notes.

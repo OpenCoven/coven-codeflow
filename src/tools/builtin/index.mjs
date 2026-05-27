@@ -61,18 +61,18 @@ const BUILTIN_DISPATCH = new Map([
     executePromptReadMcpResourceToolRequest(request, parsed, plugins, threadId)],
 ]);
 
-export async function executePromptToolRequest(prompt, stdin, threadId, parsed = {}) {
+export async function executePromptToolRequest(prompt, stdin, threadId, parsed = {}, plugins) {
   const request = parsePromptToolRequest(prompt);
   if (!request) return undefined;
-  const plugins = await loadPlugins(process.cwd());
+  const resolvedPlugins = plugins ?? await loadPlugins(process.cwd());
   if (request.toolName.startsWith('mcp__')) {
-    return executePromptMcpToolRequest(request, parsed, threadId, plugins);
+    return executePromptMcpToolRequest(request, parsed, threadId, resolvedPlugins);
   }
   const builtin = BUILTIN_DISPATCH.get(request.toolName);
-  if (builtin) return builtin(request, stdin, parsed, plugins, threadId);
-  const pluginTool = plugins.tools.find((entry) => entry.name === request.toolName);
-  if (pluginTool) return executePromptPluginToolRequest(pluginTool, request, parsed, plugins, threadId);
-  return executePromptToolboxToolRequest(request, stdin, parsed, plugins, threadId);
+  if (builtin) return builtin(request, stdin, parsed, resolvedPlugins, threadId);
+  const pluginTool = resolvedPlugins.tools.find((entry) => entry.name === request.toolName);
+  if (pluginTool) return executePromptPluginToolRequest(pluginTool, request, parsed, resolvedPlugins, threadId);
+  return executePromptToolboxToolRequest(request, stdin, parsed, resolvedPlugins, threadId);
 }
 
 export function parsePromptToolRequest(prompt) {

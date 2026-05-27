@@ -8,7 +8,6 @@ import {
 } from '../mcp/discover.mjs';
 import { discoverMcpToolRows } from '../mcp/probe.mjs';
 import {
-  listPluginTools,
   loadPlugins,
   runPluginEventHandlers,
 } from '../plugins/discover.mjs';
@@ -62,11 +61,10 @@ export async function runExecute(parsed, stdin, options = {}) {
 
   if (parsed.streamJson) {
     const activeMcpServers = listActiveMcpServerEntries(parsed, turns.map((turn) => turn.prompt).join('\n\n'));
-    const pluginTools = await listPluginTools(process.cwd());
     const tools = [
       ...BUILTIN_TOOLS.map(([name]) => name),
       ...listToolboxTools(parsed).map((tool) => tool.name),
-      ...pluginTools.map((tool) => tool.name),
+      ...plugins.tools.map((tool) => tool.name),
       ...(await discoverMcpToolRows(activeMcpServers)).map(([name]) => name),
     ].filter((name) => !isToolDisabled(name, toolKindForName(name), parsed));
     emitJson({
@@ -199,7 +197,7 @@ async function runExecuteTurn(prompt, stdin, sessionId, parsed, plugins, thread,
   const modelPrompt = contextThread
     ? threadContinuationPrompt(contextThread, turnPrompt)
     : expandThreadReferences(turnPrompt);
-  const toolRun = await executePromptToolRequest(prompt, stdin, sessionId, parsed);
+  const toolRun = await executePromptToolRequest(prompt, stdin, sessionId, parsed, plugins);
   const result = toolRun?.output ?? localAgentResponse(applySystemPrompt(modelPrompt, parsed), stdin);
   const endDecision = await runPluginEventHandlers(plugins.handlers['agent.end'], {
     message: prompt,
@@ -313,11 +311,10 @@ async function runStreamJsonInputExecute(parsed, stdin, options = {}, started = 
   const plugins = await loadPlugins(process.cwd());
   await runSessionStartHandlers(plugins, sessionId);
   const activeMcpServers = listActiveMcpServerEntries(parsed, combinedPrompt);
-  const pluginTools = await listPluginTools(process.cwd());
   const tools = [
     ...BUILTIN_TOOLS.map(([name]) => name),
     ...listToolboxTools(parsed).map((tool) => tool.name),
-    ...pluginTools.map((tool) => tool.name),
+    ...plugins.tools.map((tool) => tool.name),
     ...(await discoverMcpToolRows(activeMcpServers)).map(([name]) => name),
   ].filter((name) => !isToolDisabled(name, toolKindForName(name), parsed));
   emitJson({
@@ -351,7 +348,7 @@ async function runStreamJsonInputExecute(parsed, stdin, options = {}, started = 
     const guidancePrompt = expandAgentGuidanceReferences(expandedPrompt, parsed);
     const turnPrompt = guidancePrompt ? `${guidancePrompt}\n${expandedPrompt}` : expandedPrompt;
     const modelPrompt = modelPromptWithTranscript(turnPrompt, transcript, options.thread, parsed);
-    const toolRun = await executePromptToolRequest(input.text, '', sessionId, parsed);
+    const toolRun = await executePromptToolRequest(input.text, '', sessionId, parsed, plugins);
     result = toolRun?.output ?? localAgentResponse(modelPrompt, '');
     numTurns += streamJsonTurnCount([{ toolRun }]);
     if (toolRun?.permissionDenials) permissionDenials.push(...toolRun.permissionDenials);

@@ -1,7 +1,11 @@
 {
   "name": "@opencoven/coven-code",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OpenCoven/coven-code.git"
+  },
   "exports": {
     ".": "./src/sdk.mjs"
   },
@@ -9,8 +13,17 @@
     "coven-code": "./bin/coven-code.mjs",
     "coven-code-sdk": "./bin/coven-code-sdk.mjs"
   },
+  "files": [
+    "bin/",
+    "docs/",
+    "src/",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "test": "node --test",
+    "test": "node --test 'test/*.test.mjs'",
     "start": "node ./bin/coven-code.mjs",
     "coven-code": "node ./bin/coven-code.mjs"
   },

@@ -1,4 +1,4 @@
-import { localAgentResponse } from '../../agent/local.mjs';
+import { fixtureAgentResponse } from '../../agent/fixture.mjs';
 import { resolvePermissionDecision } from '../../commands/permissions.mjs';
 import { runPluginEventHandlers } from '../../plugins/discover.mjs';
 import { isToolDisabled } from '../toolbox.mjs';
@@ -36,7 +36,7 @@ export async function executePromptOracleToolRequest(request, parsed = {}, plugi
       permissionDenials: [{ tool: TOOL_NAME, action: decision.action, reason: 'permission' }],
     };
   }
-  const output = `Oracle: ${localAgentResponse(request.flags.prompt, '')}`;
+  const output = `Oracle: ${fixtureAgentResponse(request.flags.prompt, '')}`;
   const resultDecision = await runPluginEventHandlers(
     plugins.handlers['tool.result'],
     pluginToolResultEvent(TOOL_NAME, request.flags, 'done', output, threadId, toolUseID),

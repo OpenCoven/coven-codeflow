@@ -1,5 +1,5 @@
 import { listThreads } from '../threads/store.mjs';
-import { estimateTokenCount } from '../agent/local.mjs';
+import { estimateTokenCount } from '../agent/fixture.mjs';
 import { readEffectiveSettings } from '../settings/load.mjs';
 
 export function runUsage(parsed = {}) {

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { BUILTIN_TOOLS } from '../constants.mjs';
-import { estimateUsage, localAgentResponse } from '../agent/local.mjs';
+import { estimateUsage, fixtureAgentResponse } from '../agent/fixture.mjs';
 import {
   listActiveMcpServerEntries,
 } from '../mcp/discover.mjs';
@@ -198,7 +198,7 @@ async function runExecuteTurn(prompt, stdin, sessionId, parsed, plugins, thread,
     ? threadContinuationPrompt(contextThread, turnPrompt)
     : expandThreadReferences(turnPrompt);
   const toolRun = await executePromptToolRequest(prompt, stdin, sessionId, parsed, plugins);
-  const result = toolRun?.output ?? localAgentResponse(applySystemPrompt(modelPrompt, parsed), stdin);
+  const result = toolRun?.output ?? fixtureAgentResponse(applySystemPrompt(modelPrompt, parsed), stdin);
   const endDecision = await runPluginEventHandlers(plugins.handlers['agent.end'], {
     message: prompt,
     id: messageId,
@@ -349,7 +349,7 @@ async function runStreamJsonInputExecute(parsed, stdin, options = {}, started = 
     const turnPrompt = guidancePrompt ? `${guidancePrompt}\n${expandedPrompt}` : expandedPrompt;
     const modelPrompt = modelPromptWithTranscript(turnPrompt, transcript, options.thread, parsed);
     const toolRun = await executePromptToolRequest(input.text, '', sessionId, parsed, plugins);
-    result = toolRun?.output ?? localAgentResponse(modelPrompt, '');
+    result = toolRun?.output ?? fixtureAgentResponse(modelPrompt, '');
     numTurns += streamJsonTurnCount([{ toolRun }]);
     if (toolRun?.permissionDenials) permissionDenials.push(...toolRun.permissionDenials);
     if ((toolRun?.exitCode ?? 0) !== 0) isError = true;

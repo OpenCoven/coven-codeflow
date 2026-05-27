@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
-export function localAgentResponse(prompt, stdin) {
+export function fixtureAgentResponse(prompt, stdin) {
   const text = prompt.trim();
   const lower = text.toLowerCase();
 

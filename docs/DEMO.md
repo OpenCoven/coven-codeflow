@@ -75,12 +75,20 @@ End-to-end (recommended):
 npm run demo
 ```
 
-This invokes `bash ./scripts/demo.sh`. The script prints each command
-before running it, prefixed with `$`, and **pauses between sections**
-so the operator can narrate and the audience can keep up. Press
-`Enter` to advance to the next section, or `q` then `Enter` to quit
-cleanly at any point. Direct invocation (`bash scripts/demo.sh`)
-works identically if `npm` is unavailable.
+This invokes `bash ./scripts/demo.sh`. The script opens with a
+welcome banner that lists all 12 sections and the sandboxed HOME it
+will use, then walks the surface in order. Each section starts with a
+short narration explaining what it proves, runs its commands (the
+literal shell line is shown in magenta before the output), and closes
+with a green `✓ proved: ...` payoff line. Between sections it pauses
+on a prompt like `─── §3/12 done · Enter next: §4 Stream JSON · q quit ───`
+so the operator can narrate and the audience can keep up. After the
+final section the script prints a scoreboard summarizing what was
+demonstrated.
+
+Press `Enter` to advance, or `q` then `Enter` to quit cleanly at any
+point. Direct invocation (`bash scripts/demo.sh`) works identically
+if `npm` is unavailable.
 
 To skip the per-section pause and run straight through (for example
 when showing the demo to yourself or capturing a transcript):
@@ -93,6 +101,10 @@ npm run demo > /tmp/demo.log 2>&1  # non-TTY stdout auto-advances too
 
 When stdin is not a TTY (CI, an agent subprocess, a piped run), the
 script automatically runs in `--auto` mode so it never hangs.
+
+Colors are emitted only when stdout is a TTY. Set `NO_COLOR=1` to
+disable color in a terminal that supports it but where you would
+rather have plain output (e.g., capturing for a markdown paste).
 
 To inspect or modify the demo HOME after the run, set it explicitly:
 

@@ -86,6 +86,20 @@ test('prints a Coven Code help screen with renamed binary', () => {
   assert.doesNotMatch(result.stdout, new RegExp(`\\b${oldTitle}\\b|${oldLower}code|Usage:\\s+${oldLower}\\b`));
 });
 
+test('docs/CLI.md help excerpt matches coven-code --help', async () => {
+  const help = runCovenCode(['--help']);
+  assert.equal(help.status, 0, help.stderr);
+
+  const docs = await readFile(path.join(repoRoot, 'docs', 'CLI.md'), 'utf8');
+  const match = docs.match(/<!-- BEGIN: coven-code --help -->\n```text\n([\s\S]+?)\n```\n<!-- END: coven-code --help -->/);
+  assert.ok(match, 'docs/CLI.md is missing the BEGIN/END markers around the --help excerpt');
+  assert.equal(
+    match[1],
+    help.stdout.trimEnd(),
+    'docs/CLI.md --help excerpt drifted from coven-code --help; regenerate it with `node ./bin/coven-code.mjs --help` between the markers',
+  );
+});
+
 test('help lists documented noninteractive and config flags', () => {
   const result = runCovenCode(['--help']);
 

@@ -10,6 +10,12 @@
 # MCP servers. Every command runs against a freshly created HOME so
 # the demo leaves no state behind on the operator's machine.
 #
+# Default mode is interactive: the script pauses between each section
+# and waits for the operator to press Enter. Pass --auto (or set
+# COVEN_DEMO_AUTO=1) to run straight through. The script also auto-
+# advances when stdin is not a TTY (CI, agent subprocesses, piping
+# to a log) so non-interactive invocations never hang.
+#
 # Pair with docs/DEMO.md for narration. An agent driving the demo can
 # follow either this script top-to-bottom or the section headers in
 # docs/DEMO.md, which match section IDs here.
@@ -17,6 +23,40 @@
 set -euo pipefail
 
 # ---- Section: setup ----------------------------------------------------------
+
+AUTO_MODE=0
+for arg in "$@"; do
+  case "$arg" in
+    --auto|--no-pause)
+      AUTO_MODE=1
+      ;;
+    -h|--help)
+      cat <<'USAGE'
+Usage: bash scripts/demo.sh [--auto]
+
+  --auto         Skip the per-section pause and run straight through.
+                 Default: pause between sections in a TTY; auto when
+                 stdin is piped (CI, agents, log capture).
+
+Environment:
+  COVEN_DEMO_HOME=<dir>   Use a specific HOME instead of $(mktemp -d).
+  COVEN_DEMO_AUTO=1       Same as --auto.
+USAGE
+      exit 0
+      ;;
+    *)
+      printf 'Unknown argument: %s (try --help)\n' "$arg" >&2
+      exit 2
+      ;;
+  esac
+done
+if [[ "${COVEN_DEMO_AUTO:-0}" == "1" ]]; then
+  AUTO_MODE=1
+fi
+# When stdin is not a TTY, force auto so non-interactive callers don't hang.
+if [[ ! -t 0 ]]; then
+  AUTO_MODE=1
+fi
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CLI="$REPO_ROOT/bin/coven-code.mjs"
@@ -35,7 +75,22 @@ mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME"
 
 cd "$DEMO_HOME"
 
+SECTION_INDEX=0
 section() {
+  if [[ "$SECTION_INDEX" -gt 0 ]] && [[ "$AUTO_MODE" != "1" ]]; then
+    printf '\n[Enter] continue  [q] quit\n> '
+    if ! IFS= read -r answer; then
+      answer="q"
+    fi
+    case "$answer" in
+      q|Q|quit|exit)
+        printf '\nDemo halted by operator after section %d.\n' "$SECTION_INDEX"
+        printf 'Demo HOME: %s\n' "$DEMO_HOME"
+        exit 0
+        ;;
+    esac
+  fi
+  SECTION_INDEX=$((SECTION_INDEX + 1))
   printf '\n\n=========================================================\n'
   printf '== %s\n' "$1"
   printf '=========================================================\n'

@@ -18,7 +18,9 @@ You are driving this demo for the user. Follow these rules:
 1. **Prefer the script over ad-hoc commands.** If the user says "run the
    demo" with no qualifier, run `npm run demo` once end-to-end and
    report results. Do not improvise commands that drift from what is
-   documented here.
+   documented here. The script is interactive by default but
+   auto-advances when stdin is not a TTY, so invoking it from an agent
+   subprocess will not hang — it runs straight through.
 
 2. **Walk the sections in order if asked to narrate.** When the user
    asks for a guided walkthrough, run each section's commands in the
@@ -74,15 +76,23 @@ npm run demo
 ```
 
 This invokes `bash ./scripts/demo.sh`. The script prints each command
-before running it, prefixed with `$`, so the operator can follow along.
-Output is also captured naturally by the terminal. Direct invocation
-(`bash scripts/demo.sh`) works identically if `npm` is unavailable.
+before running it, prefixed with `$`, and **pauses between sections**
+so the operator can narrate and the audience can keep up. Press
+`Enter` to advance to the next section, or `q` then `Enter` to quit
+cleanly at any point. Direct invocation (`bash scripts/demo.sh`)
+works identically if `npm` is unavailable.
 
-To send the run to a log:
+To skip the per-section pause and run straight through (for example
+when showing the demo to yourself or capturing a transcript):
 
 ```sh
-npm run demo > /tmp/coven-code-demo.log 2>&1
+npm run demo -- --auto             # explicit flag
+COVEN_DEMO_AUTO=1 npm run demo     # env var
+npm run demo > /tmp/demo.log 2>&1  # non-TTY stdout auto-advances too
 ```
+
+When stdin is not a TTY (CI, an agent subprocess, a piped run), the
+script automatically runs in `--auto` mode so it never hangs.
 
 To inspect or modify the demo HOME after the run, set it explicitly:
 

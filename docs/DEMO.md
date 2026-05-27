@@ -90,8 +90,11 @@ The menu accepts:
 | -------- | -------------------------------------------------------- |
 | `1`-`12` | run one section by number                                |
 | `a`      | run all sections in sequence, then print the scoreboard  |
+| `r`      | replay the last section you ran                          |
 | `t`      | type your own prompt and run one execute turn            |
 | `s`      | list the files the demo wrote into the sandbox HOME      |
+| `x`      | open a real subshell inside the sandbox (`exit` returns) |
+| `c`      | copy the sandbox path to your clipboard                  |
 | `l`      | re-print the section table of contents (with `✓` marks)  |
 | `?`      | show the menu help                                       |
 | `q`      | quit (sandbox path printed so you can clean up or poke around) |
@@ -144,7 +147,7 @@ rm -rf "$DEMO_HOME"   # the script prints the exact path at the end
 works without any account or API key.
 
 ```sh
-node ./bin/coven-code.mjs --version       # prints 0.0.2
+node ./bin/coven-code.mjs --version       # prints 0.0.3
 node ./bin/coven-code.mjs --help          # full option and command reference
 node ./bin/coven-code.mjs login           # printable instructions (no token yet)
 node ./bin/coven-code.mjs login status    # auth_status: logged_out

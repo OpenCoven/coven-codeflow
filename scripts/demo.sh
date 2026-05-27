@@ -566,15 +566,37 @@ show_menu_help() {
   printf '\n  %sCommands:%s\n' "$C_BOLD" "$C_RESET"
   printf '    %s1-12%s     run a single section\n' "$C_BOLD" "$C_RESET"
   printf '    %sa%s        run all sections in order, then show scoreboard\n' "$C_BOLD" "$C_RESET"
+  printf '    %sr%s        replay the last section you ran\n' "$C_BOLD" "$C_RESET"
   printf '    %st%s        try your own prompt (one execute turn)\n' "$C_BOLD" "$C_RESET"
   printf '    %ss%s        show files in the sandbox HOME\n' "$C_BOLD" "$C_RESET"
+  printf '    %sx%s        open a shell inside the sandbox (exit returns)\n' "$C_BOLD" "$C_RESET"
+  printf '    %sc%s        copy the sandbox path to the clipboard\n' "$C_BOLD" "$C_RESET"
   printf '    %sl%s        list sections again\n' "$C_BOLD" "$C_RESET"
   printf '    %s?%s        show this help\n' "$C_BOLD" "$C_RESET"
   printf '    %sq%s        quit (Ctrl-C also works)\n' "$C_BOLD" "$C_RESET"
 }
 
+LAST_SECTION_IDX=-1
+
+run_section_by_index() {
+  local idx="$1"
+  LAST_SECTION_IDX="$idx"
+  "${SECTION_FUNCS[$idx]}"
+}
+
+replay_last_section() {
+  if [[ "$LAST_SECTION_IDX" -lt 0 ]]; then
+    printf '%sNo section run yet.%s Pick a number 1-12 first.\n' "$C_YELLOW" "$C_RESET"
+    return
+  fi
+  local num=$((LAST_SECTION_IDX + 1))
+  printf '\n%sReplaying §%d %s%s\n' "$C_DIM" "$num" "${SECTION_TAGS[$LAST_SECTION_IDX]}" "$C_RESET"
+  "${SECTION_FUNCS[$LAST_SECTION_IDX]}"
+}
+
 try_a_prompt() {
   printf '\n%sType a prompt for one execute turn (Enter cancels).%s\n' "$C_BOLD" "$C_RESET"
+  printf '%sExamples:%s "what is 2+2?"  ·  "summarize @sample.md"  ·  "list available tools"\n' "$C_DIM" "$C_RESET"
   local user_prompt=""
   prompt_line "prompt> " user_prompt
   if [[ -z "$user_prompt" ]]; then
@@ -583,6 +605,33 @@ try_a_prompt() {
   fi
   cc -x "$user_prompt"
   printf '\n%s(answered by the local fixture agent — no network)%s\n' "$C_DIM" "$C_RESET"
+}
+
+shell_in_sandbox() {
+  printf '\n%sOpening a subshell at %s%s\n' "$C_BOLD" "$DEMO_HOME" "$C_RESET"
+  printf '%sType `exit` (or Ctrl-D) to return to the demo menu.%s\n\n' "$C_DIM" "$C_RESET"
+  ( cd "$DEMO_HOME" && PS1="(coven-demo) \W $ " "${SHELL:-/bin/bash}" -i ) || true
+  printf '\n%sBack in the demo menu.%s\n' "$C_DIM" "$C_RESET"
+}
+
+copy_sandbox_path() {
+  local copied=0 tool=""
+  if command -v pbcopy >/dev/null 2>&1; then
+    printf '%s' "$DEMO_HOME" | pbcopy && copied=1 && tool="pbcopy"
+  elif command -v wl-copy >/dev/null 2>&1; then
+    printf '%s' "$DEMO_HOME" | wl-copy && copied=1 && tool="wl-copy"
+  elif command -v xclip >/dev/null 2>&1; then
+    printf '%s' "$DEMO_HOME" | xclip -selection clipboard && copied=1 && tool="xclip"
+  elif command -v xsel >/dev/null 2>&1; then
+    printf '%s' "$DEMO_HOME" | xsel --clipboard --input && copied=1 && tool="xsel"
+  fi
+  if [[ "$copied" == "1" ]]; then
+    printf '%s✓ copied%s sandbox path to clipboard via %s\n  %s\n' \
+      "$C_GREEN" "$C_RESET" "$tool" "$DEMO_HOME"
+  else
+    printf '%sNo clipboard tool found%s (looked for pbcopy / wl-copy / xclip / xsel).\n  Path: %s\n' \
+      "$C_YELLOW" "$C_RESET" "$DEMO_HOME"
+  fi
 }
 
 # ---- Top-level flow ---------------------------------------------------------
@@ -611,19 +660,27 @@ while true; do
       continue
       ;;
     [1-9]|1[0-2])
-      idx=$((CHOICE - 1))
-      "${SECTION_FUNCS[$idx]}"
+      run_section_by_index $((CHOICE - 1))
       ;;
     a|A|all)
-      for fn in "${SECTION_FUNCS[@]}"; do
-        "$fn"
+      for idx in "${!SECTION_FUNCS[@]}"; do
+        run_section_by_index "$idx"
       done
+      ;;
+    r|R|replay)
+      replay_last_section
       ;;
     t|T|try)
       try_a_prompt
       ;;
     s|S|sandbox)
       show_sandbox_listing
+      ;;
+    x|X|shell)
+      shell_in_sandbox
+      ;;
+    c|C|copy)
+      copy_sandbox_path
       ;;
     l|L|list|ls)
       show_toc

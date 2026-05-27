@@ -624,3 +624,36 @@ export default function (covenCode) {
     command: ['setAvailability', 'unsubscribe'],
   });
 });
+
+test('slash catalog degrades gracefully when a plugin throws on import', async () => {
+  const home = await mkdtemp(path.join(tmpdir(), 'coven-code-slash-degrade-'));
+  const xdg = path.join(home, '.config');
+  const workspace = path.join(home, 'repo');
+  await mkdir(path.join(xdg, 'coven-code', 'plugins'), { recursive: true });
+  await mkdir(path.join(workspace, '.coven-code', 'plugins'), { recursive: true });
+  await writeFile(path.join(workspace, 'package.json'), '{"name":"fixture"}\n');
+  await writeFile(
+    path.join(workspace, '.coven-code', 'plugins', 'boom.ts'),
+    'throw new Error("intentional plugin boom");\n',
+  );
+
+  const slashModuleUrl = pathToFileURL(path.join(repoRoot, 'src', 'cli', 'slash-commands.mjs')).href;
+  const script = `
+    import { buildSlashCommandCatalog } from ${JSON.stringify(slashModuleUrl)};
+    const catalog = await buildSlashCommandCatalog({ parsed: {}, cwd: process.cwd() });
+    process.stdout.write(JSON.stringify(catalog.map((entry) => entry.command)));
+  `;
+
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    cwd: workspace,
+    env: { ...process.env, HOME: home, XDG_CONFIG_HOME: xdg },
+    encoding: 'utf8',
+  });
+
+  assert.equal(result.status, 0, `exit ${result.status}\nstderr:\n${result.stderr}`);
+  const commands = JSON.parse(result.stdout);
+  assert.ok(commands.includes('/help'), `expected /help in catalog, got: ${result.stdout}`);
+  assert.ok(commands.includes('/mode'), `expected /mode in catalog, got: ${result.stdout}`);
+  assert.match(result.stderr, /plugin catalog unavailable/);
+  assert.match(result.stderr, /intentional plugin boom/);
+});

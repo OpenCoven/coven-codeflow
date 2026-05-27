@@ -573,6 +573,10 @@ show_menu_help() {
   printf '    %sq%s        quit (Ctrl-C also works)\n' "$C_BOLD" "$C_RESET"
 }
 
+# Section functions are expected to be idempotent: replay re-invokes the same
+# function with no state reset, so a section that appends/counts/accumulates
+# would compound on each replay. Sections currently create files fresh and
+# reuse the same names — keep it that way when adding new ones.
 LAST_SECTION_IDX=-1
 
 run_section_by_index() {

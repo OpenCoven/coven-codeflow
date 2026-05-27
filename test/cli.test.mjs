@@ -125,8 +125,8 @@ test('package metadata uses the Coven Code npm package and binaries', async () =
   assert.equal(pkg.name, '@opencoven/coven-code');
   assert.equal(pkg.private, undefined);
   assert.deepEqual(pkg.bin, {
-    'coven-code': './bin/coven-code.mjs',
-    'coven-code-sdk': './bin/coven-code-sdk.mjs',
+    'coven-code': 'bin/coven-code.mjs',
+    'coven-code-sdk': 'bin/coven-code-sdk.mjs',
   });
   assert.equal(lock.name, '@opencoven/coven-code');
   assert.equal(lock.packages[''].name, '@opencoven/coven-code');

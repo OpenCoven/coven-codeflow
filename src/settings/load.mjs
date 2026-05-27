@@ -9,9 +9,9 @@ export function readSettings(parsed = {}) {
   return readSettingsFile(settingsFile(parsed));
 }
 
-export function readEffectiveSettings(parsed = {}) {
+export function readEffectiveSettings(parsed = {}, options = {}) {
   const userSettings = readSettings(parsed);
-  const workspacePath = findWorkspaceSettingsFile(process.cwd());
+  const workspacePath = findWorkspaceSettingsFile(options.cwd ?? process.cwd());
   const workspaceSettings = workspacePath ? readSettingsFile(workspacePath) : {};
   return { ...userSettings, ...workspaceSettings, ...readManagedSettings() };
 }

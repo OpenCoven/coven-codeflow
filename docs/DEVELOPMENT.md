@@ -58,7 +58,9 @@ npm run coven-code -- -x "what is 2+2?"
 ```
 
 For interactive demos, bare `coven-code` opens the `neo-blessed` panel TUI. Use
-the classic readline surface only when the demo needs a plain prompt:
+`/` in the composer to verify the slash-command menu, filtering, details panel,
+Tab completion, Enter acceptance, and Esc close behavior. Use the classic
+readline surface only when the demo needs a plain prompt:
 
 ```sh
 COVEN_CODE_REPL=1 \
@@ -75,9 +77,10 @@ changing execute mode, stream JSON, stdin piping, or subcommand behavior.
 
 Add or update tests in `test/cli.test.mjs` for any CLI behavior change. TUI
 changes should cover the model/renderer, key handling, scripted smoke path, and
-classic REPL compatibility when needed. Prefer deterministic local tests over
-network calls. When a feature integrates with MCP, plugins, skills, or toolbox
-tools, test both discovery and execution paths.
+classic REPL compatibility when needed. Slash-command changes should test the
+catalog source and at least one rendered/filtering TUI state. Prefer
+deterministic local tests over network calls. When a feature integrates with MCP,
+plugins, skills, or toolbox tools, test both discovery and execution paths.
 
 ## Safety
 

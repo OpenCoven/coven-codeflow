@@ -28,16 +28,16 @@ The package exposes `coven-code` and `coven-code-sdk` bins.
 ## Interactive Mode
 
 Running `coven-code` with no arguments in a terminal starts the `neo-blessed`
-panel TUI.
+panel TUI. Type `/` in the composer to open the slash-command menu with live
+filtering and a details panel for commands, skills, and plugin actions.
 
 ```text
 $ coven-code
 Coven Code 0.0.0-recreate
-chat lane tools threads config help
+/Users/example/project
+[chat]  lane   tools   threads   config   help    mode: smart   effort: high
 --------------------------------------------------------------------------------
-Ready. Type a prompt or /help.                         | thread: new thread
-                                                        | lane: unknown
-                                                        | harness: smart
+Ready. Type a prompt or /help.
 --------------------------------------------------------------------------------
 >
 ```

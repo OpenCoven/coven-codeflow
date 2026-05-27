@@ -12,7 +12,7 @@ const BUILTIN_SKILLS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)
 export function listSkills(options = {}) {
   const seen = new Set();
   const skills = [];
-  for (const root of [...parsedSkillRoots(options.parsed), ...skillSearchRoots()]) {
+  for (const root of [...parsedSkillRoots(options.parsed), ...skillSearchRoots(options.cwd)]) {
     if (!existsSync(root.dir)) continue;
     for (const entry of readdirSync(root.dir)) {
       const dir = path.join(root.dir, entry);
@@ -31,27 +31,27 @@ export function findSkill(name) {
   return listSkills().find((skill) => skill.name === name);
 }
 
-export function skillSearchRoots() {
+export function skillSearchRoots(cwd = process.cwd()) {
   const userRoots = [
     { source: 'user', dir: path.join(configDir(), 'agents', 'skills') },
     { source: 'user', dir: path.join(configDir(), CONFIG_SUBDIR, 'skills') },
     ...configuredSkillRoots(readSettings({})),
   ];
-  const projectRoots = projectSkillRoots('.agents', 'skills');
+  const projectRoots = projectSkillRoots(cwd, '.agents', 'skills');
   if (readSettings({})['covenCode.skills.disableLegacySkillRoots'] === true) return [...userRoots, ...projectRoots];
   return [
     ...userRoots,
     ...projectRoots,
-    ...projectSkillRoots('.claude', 'skills'),
+    ...projectSkillRoots(cwd, '.claude', 'skills'),
     { source: 'user', dir: path.join(os.homedir(), '.claude', 'skills') },
     { source: 'built-in', dir: BUILTIN_SKILLS_DIR },
   ];
 }
 
-function projectSkillRoots(...parts) {
+function projectSkillRoots(cwd, ...parts) {
   const roots = [];
   const home = os.homedir();
-  let current = path.resolve(process.cwd());
+  let current = path.resolve(cwd);
   while (true) {
     roots.push({ source: 'project', dir: path.join(current, ...parts) });
     if (current === home || current === path.dirname(current)) break;

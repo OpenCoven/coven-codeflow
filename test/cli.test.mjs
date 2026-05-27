@@ -145,6 +145,124 @@ test('interactive core handles mode, reasoning, queue, and new thread slash comm
   assert.equal(session.thread, undefined);
 });
 
+test('slash command catalog includes static skills plugins and excludes hidden commands', async () => {
+  const home = await mkdtemp(path.join(tmpdir(), 'coven-code-home-'));
+  const xdg = path.join(home, '.config');
+  const workspace = path.join(home, 'repo');
+  const skillRoot = path.join(home, 'skills');
+  await mkdir(path.join(workspace, '.coven-code', 'plugins'), { recursive: true });
+  await mkdir(path.join(skillRoot, 'release-check'), { recursive: true });
+  await writeFile(path.join(workspace, 'package.json'), '{"name":"fixture","type":"module"}\n');
+  await writeFile(path.join(skillRoot, 'release-check', 'SKILL.md'), `---
+name: release-check
+description: Run the release readiness checklist
+---
+
+# Release Check
+`);
+  await writeFile(path.join(workspace, '.coven-code', 'plugins', 'commands.ts'), `
+export default function (covenCode) {
+  covenCode.registerCommand(
+    'project-status',
+    {
+      title: 'Project status',
+      category: 'ops',
+      description: 'Show project status details.',
+    },
+    async () => 'status',
+  );
+
+  const disabled = covenCode.registerCommand(
+    'deploy-prod',
+    {
+      title: 'Deploy production',
+      category: 'ops',
+      description: 'Deploy production.',
+    },
+    async () => 'deployed',
+  );
+  disabled.setAvailability({ type: 'disabled', reason: 'Maintenance window' });
+
+  const hidden = covenCode.registerCommand(
+    'internal-toggle',
+    { title: 'Internal toggle', category: 'ops' },
+    async () => 'hidden',
+  );
+  hidden.setAvailability({ type: 'hidden' });
+}
+`);
+
+  const { buildSlashCommandCatalog, filterSlashCommands, formatSlashCommandDetails } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'slash-commands.mjs')));
+  const catalog = await buildSlashCommandCatalog({
+    cwd: workspace,
+    parsed: { skills: skillRoot },
+    env: { XDG_CONFIG_HOME: xdg, HOME: home },
+  });
+  const byName = new Map(catalog.map((entry) => [entry.name, entry]));
+
+  assert.equal(byName.get('help').source, 'built-in');
+  assert.equal(byName.get('tools').command, '/tools');
+  assert.equal(byName.get('release-check').source, 'skill');
+  assert.equal(byName.get('release-check').description, 'Run the release readiness checklist');
+  assert.equal(byName.get('project-status').source, 'plugin');
+  assert.equal(byName.get('deploy-prod').availability.type, 'disabled');
+  assert.equal(byName.get('deploy-prod').availability.reason, 'Maintenance window');
+  assert.equal(byName.has('internal-toggle'), false);
+
+  assert.deepEqual(filterSlashCommands(catalog, '/proj').map((entry) => entry.name), ['project-status']);
+  assert.match(formatSlashCommandDetails(byName.get('deploy-prod')).join('\n'), /Status: disabled - Maintenance window/);
+});
+
+test('interactive core skill slash commands show details and submit skill-guided prompts', async () => {
+  const home = await mkdtemp(path.join(tmpdir(), 'coven-code-home-'));
+  const skillRoot = path.join(home, 'skills');
+  await mkdir(path.join(skillRoot, 'release-check'), { recursive: true });
+  await writeFile(path.join(skillRoot, 'release-check', 'SKILL.md'), `---
+name: release-check
+description: Run the release readiness checklist
+---
+
+# Release Check
+
+Use this before publishing a release.
+`);
+
+  const { createInteractiveSession, handleInteractiveInput } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'interactive-core.mjs')));
+  let submittedPrompt = '';
+  const session = createInteractiveSession(
+    { mode: 'smart', reasoningEffort: 'high', skills: skillRoot },
+    {
+      executeRunner: async (parsed) => {
+        submittedPrompt = parsed.prompt;
+        return { id: 'T-skill', messages: [{ role: 'user', content: parsed.prompt }] };
+      },
+    },
+  );
+
+  const details = await handleInteractiveInput(session, '/release-check');
+  assert.equal(details.kind, 'command');
+  assert.match(details.lines.join('\n'), /\/release-check/);
+  assert.match(details.lines.join('\n'), /Run the release readiness checklist/);
+
+  const help = await handleInteractiveInput(session, '/help');
+  assert.equal(help.kind, 'help');
+  assert.match(help.lines.join('\n'), /\/release-check \[prompt\]/);
+
+  const paletteHelp = await handleInteractiveInput(session, '/coven-code: help');
+  assert.equal(paletteHelp.kind, 'help');
+  assert.match(paletteHelp.lines.join('\n'), /\/release-check \[prompt\]/);
+
+  const slash = await handleInteractiveInput(session, '/');
+  assert.equal(slash.kind, 'help');
+  assert.match(slash.lines.join('\n'), /\/release-check \[prompt\]/);
+
+  const turn = await handleInteractiveInput(session, '/release-check inspect the release notes');
+  assert.equal(turn.kind, 'turn');
+  assert.match(submittedPrompt, /\[skill:release-check\]/);
+  assert.match(submittedPrompt, /Use this before publishing a release/);
+  assert.match(submittedPrompt, /\[prompt\]\ninspect the release notes\n\[\/prompt\]/);
+});
+
 test('interactive routing chooses tui by default for tty sessions and repl when requested', async () => {
   const { selectInteractiveRunner } = await import(pathToFileURL(path.join(repoRoot, 'src', 'main.mjs')));
 
@@ -169,6 +287,9 @@ test('interactive routing chooses tui by default for tty sessions and repl when 
 
 test('tui model renders panel layout with transcript tabs status rail and composer', async () => {
   const { createTuiModel, renderTuiFrame } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'tui.mjs')));
+  const workspace = await mkdtemp(path.join(tmpdir(), 'coven-code-tui-config-'));
+  await mkdir(path.join(workspace, '.coven-code'), { recursive: true });
+  await writeFile(path.join(workspace, '.coven-code', 'settings.json'), '{"covenCode.updates.mode":"off"}\n');
 
   const model = createTuiModel({
     version: '0.0.0-test',
@@ -176,6 +297,7 @@ test('tui model renders panel layout with transcript tabs status rail and compos
     reasoningEffort: 'medium',
     threadId: 'T-test',
     toolCount: 18,
+    cwd: workspace,
   });
   model.transcript.push({ role: 'you', text: 'hello' });
   model.composer = 'what is 2+2?';
@@ -183,12 +305,22 @@ test('tui model renders panel layout with transcript tabs status rail and compos
   const frame = renderTuiFrame(model, { columns: 82, rows: 24, color: false });
 
   assert.match(frame, /Coven Code 0\.0\.0-test/);
-  assert.match(frame, /chat\s+lane\s+tools\s+threads\s+config\s+help/);
+  assert.match(frame, /\[chat\]\s+lane\s+tools\s+threads\s+config\s+help/);
   assert.match(frame, /you/);
   assert.match(frame, /hello/);
   assert.match(frame, /thread: T-test/);
   assert.match(frame, /mode: smart/);
   assert.match(frame, /> what is 2\+2\?/);
+
+  model.activeTab = 'tools';
+  assert.match(renderTuiFrame(model, { columns: 82, rows: 24 }), /Built-in tools/);
+  model.activeTab = 'threads';
+  assert.match(renderTuiFrame(model, { columns: 82, rows: 24 }), /Recent threads/);
+  model.activeTab = 'config';
+  const configFrame = renderTuiFrame(model, { columns: 120, rows: 24 });
+  assert.match(configFrame, /Settings/);
+  assert.match(configFrame, new RegExp(escapeRegExp(path.join(workspace, '.coven-code', 'settings.json'))));
+  assert.match(configFrame, /updates: off/);
 });
 
 test('tui lane panel renders worktree branch harness git diff verification and cleanup state', async () => {
@@ -217,7 +349,7 @@ test('tui lane panel renders worktree branch harness git diff verification and c
 
   const frame = renderTuiFrame(model, { columns: 120, rows: 30 });
 
-  assert.match(frame, /chat\s+lane\s+tools\s+threads\s+config\s+help/);
+  assert.match(frame, /chat\s+\[lane\]\s+tools\s+threads\s+config\s+help/);
   assert.match(frame, /worktree: \/tmp\/cast-codes-lane/);
   assert.match(frame, /branch: meow\/lane-parity/);
   assert.match(frame, /base: main/);
@@ -303,6 +435,57 @@ test('tui key handling cycles tabs and command palette actions reuse interactive
   assert.match(model.transcript.at(-1).text, /mode: deep/);
 });
 
+test('tui slash menu opens on slash filters renders details and completes commands', async () => {
+  const { createInteractiveSession } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'interactive-core.mjs')));
+  const { buildSlashCommandCatalog } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'slash-commands.mjs')));
+  const { createTuiModel, handleTuiKey, renderTuiFrame } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'tui.mjs')));
+  const catalog = await buildSlashCommandCatalog({ parsed: { mode: 'smart', reasoningEffort: 'high' }, cwd: repoRoot });
+  const model = createTuiModel({ slashCatalog: catalog, mode: 'smart', reasoningEffort: 'high' });
+  const session = createInteractiveSession({ mode: 'smart', reasoningEffort: 'high' });
+
+  await handleTuiKey(model, session, { sequence: '/' });
+  assert.equal(model.slashOpen, true);
+  assert.equal(model.slashQuery, '');
+  assert.ok(model.slashMatches.length > 0);
+  assert.match(renderTuiFrame(model, { columns: 100, rows: 24 }), /Slash commands/);
+  assert.match(renderTuiFrame(model, { columns: 100, rows: 24 }), /Usage:/);
+
+  await handleTuiKey(model, session, { sequence: 'm' });
+  await handleTuiKey(model, session, { sequence: 'o' });
+  assert.equal(model.composer, '/mo');
+  assert.equal(model.slashMatches[0].name, 'mode');
+
+  await handleTuiKey(model, session, { name: 'tab' });
+  assert.equal(model.composer, '/mode ');
+  assert.equal(model.slashOpen, false);
+});
+
+test('tui slash menu supports navigation enter acceptance escape close and narrow frames', async () => {
+  const { createInteractiveSession } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'interactive-core.mjs')));
+  const { buildSlashCommandCatalog } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'slash-commands.mjs')));
+  const { createTuiModel, handleTuiKey, renderTuiFrame } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'tui.mjs')));
+  const catalog = await buildSlashCommandCatalog({ parsed: { mode: 'smart', reasoningEffort: 'high' }, cwd: repoRoot });
+  const model = createTuiModel({ slashCatalog: catalog, mode: 'smart', reasoningEffort: 'high' });
+  const session = createInteractiveSession({ mode: 'smart', reasoningEffort: 'high' });
+
+  await handleTuiKey(model, session, { sequence: '/' });
+  await handleTuiKey(model, session, { name: 'down' });
+  assert.equal(model.slashIndex, 1);
+  await handleTuiKey(model, session, { name: 'up' });
+  assert.equal(model.slashIndex, 0);
+
+  await handleTuiKey(model, session, { sequence: 'h' });
+  await handleTuiKey(model, session, { sequence: 'e' });
+  await handleTuiKey(model, session, { name: 'enter' });
+  assert.equal(model.slashOpen, false);
+  assert.match(model.transcript.at(-1).text, /Slash commands:/);
+
+  await handleTuiKey(model, session, { sequence: '/' });
+  await handleTuiKey(model, session, { name: 'escape' });
+  assert.equal(model.slashOpen, false);
+  assert.doesNotThrow(() => renderTuiFrame(model, { columns: 52, rows: 16 }));
+});
+
 test('tui scripted smoke processes input and exits without changing execute mode', () => {
   const result = runCovenCode([], {
     input: '/mode deep\n/exit\n',
@@ -323,7 +506,11 @@ test('tui scripted smoke processes input and exits without changing execute mode
 
 test('tui scripted prompt renders assistant output inside the transcript', async () => {
   const home = await mkdtemp(path.join(tmpdir(), 'coven-code-tui-home-'));
+  const workspace = await mkdtemp(path.join(tmpdir(), 'coven-code-tui-'));
+  await writeFile(path.join(workspace, 'README.md'), '# TUI Test Workspace\n');
+  await writeFile(path.join(workspace, 'package.json'), '{"name":"fixture"}\n');
   const result = runCovenCode([], {
+    cwd: workspace,
     input: 'what is 2+2?\n/exit\n',
     env: {
       HOME: home,
@@ -8193,12 +8380,20 @@ test(
 test(
   'interactive REPL runs a turn, handles /help, and exits cleanly on /exit',
   { skip: expectAvailable ? false : 'expect(1) not installed' },
-  () => {
+  async () => {
+    const skillRoot = await mkdtemp(path.join(tmpdir(), 'coven-code-repl-skills-'));
+    await mkdir(path.join(skillRoot, 'release-check'), { recursive: true });
+    await writeFile(path.join(skillRoot, 'release-check', 'SKILL.md'), `---
+name: release-check
+description: Run the release readiness checklist
+---
+# Release Check
+`);
     const script = [
       'log_user 1',
       'set timeout 10',
       'set env(HIDDEN_SHELL_OUTPUT) "hidden-live-shell"',
-      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin}`,
+      `spawn -noecho env COVEN_CODE_REPL=1 ${process.execPath} ${covenCodeBin} --skills ${skillRoot}`,
       'expect -re "interactive mode"',
       'expect -re "> "',
       'send -- "what is 2+2?\\r"',
@@ -8211,6 +8406,10 @@ test(
       'expect {',
       '  -re "Slash commands:" { }',
       '  timeout { puts "TIMEOUT after /help"; exit 3 }',
+      '}',
+      'expect {',
+      '  -re {/release-check \\[prompt\\] +Run the release readiness checklist} { puts "MATCHED_REPL_SKILL_HELP" }',
+      '  timeout { puts "TIMEOUT waiting for dynamic skill help"; exit 6 }',
       '}',
       'expect -re "> "',
       'send -- "/exit\\r"',
@@ -8225,6 +8424,7 @@ test(
     );
     assert.match(result.stdout, /interactive mode/);
     assert.match(result.stdout, /\n4\r?\n/);
+    assert.match(result.stdout, /MATCHED_REPL_SKILL_HELP/);
   },
 );
 

@@ -31,16 +31,14 @@ coven-code
 ```
 
 The default interactive surface is a full-screen `neo-blessed` panel TUI with a
-transcript, tabs, status rail, command palette, and composer. It keeps a current
-local thread and accepts slash commands:
+transcript, tabs, compact status line, command palette, slash-command menu, and
+composer. It keeps a current local thread and accepts slash commands:
 
 ```text
 Coven Code 0.0.0-recreate
-chat lane tools threads config help
+[chat]  lane   tools   threads   config   help    mode: smart   effort: high
 --------------------------------------------------------------------------------
-Ready. Type a prompt or /help.                         | thread: new thread
-                                                        | lane: unknown
-                                                        | harness: smart
+Ready. Type a prompt or /help.
 --------------------------------------------------------------------------------
 > /help
 ```
@@ -52,6 +50,9 @@ Supported interactive behaviors include:
 - `/lane harness <smart|deep|rush|large|next>` to select the active lane harness
 - `/lane verify` to run the detected verification command and keep its output in the lane panel
 - `/lane status` and `/lane diff` to inspect the visible lane model
+- `/` opens a filtered command menu with details for built-ins, skills, and
+  plugin commands
+- Tab completes the selected slash command; Enter accepts it; Esc closes the menu
 - command palette actions for common thread and tool workflows
 - persistent line history
 - `/new` to start a fresh thread

@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Node.js 20 or newer
+- Node.js 24 or newer (plugins are loaded as `.ts` modules, which Node added native unflagged support for in 23.6)
 - npm for this package's current lockfile and scripts
 
 The runtime intentionally has a small dependency surface. `neo-blessed` owns the

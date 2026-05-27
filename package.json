@@ -28,7 +28,7 @@
     "coven-code": "node ./bin/coven-code.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "dependencies": {
     "neo-blessed": "0.2.0"

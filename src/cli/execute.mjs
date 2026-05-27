@@ -154,7 +154,9 @@ export async function runExecute(parsed, stdin, options = {}) {
     return thread;
   }
 
-  process.stdout.write(result.endsWith('\n') ? result : `${result}\n`);
+  if (!options.silent) {
+    process.stdout.write(result.endsWith('\n') ? result : `${result}\n`);
+  }
   const thread = await persistThreadMessages(sessionId, turnMessages(turns), parsed.mode, options.thread, parsed);
   notifyAgentComplete(parsed);
   return thread;

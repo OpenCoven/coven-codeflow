@@ -28,6 +28,7 @@ export function createInteractiveSession(parsed, options = {}) {
     thread: options.thread,
     cwd: options.cwd ?? process.cwd(),
     queuedMessages: [],
+    silent: options.silent ?? false,
     commandRunner: options.commandRunner ?? runCommand,
     executeRunner: options.executeRunner ?? runExecute,
     editorReader: options.editorReader ?? readEditorPrompt,
@@ -39,9 +40,9 @@ export async function handleInteractiveInput(session, text) {
   if (text === '/exit' || text === '/quit') return { kind: 'exit', lines: [] };
   if (text === '/help') return { kind: 'help', lines: await sessionSlashHelpLines(session) };
   if (!text.startsWith('/')) {
-    session.thread = await runInteractiveTurn(session.parsed, text, session.thread, session.executeRunner);
+    session.thread = await runInteractiveTurn(session.parsed, text, session.thread, session.executeRunner, { silent: session.silent });
     while (session.queuedMessages.length > 0) {
-      session.thread = await runInteractiveTurn(session.parsed, session.queuedMessages.shift(), session.thread, session.executeRunner);
+      session.thread = await runInteractiveTurn(session.parsed, session.queuedMessages.shift(), session.thread, session.executeRunner, { silent: session.silent });
     }
     return { kind: 'turn', lines: [] };
   }
@@ -184,9 +185,9 @@ export async function handleInteractiveInput(session, text) {
 }
 
 async function submitPromptAndQueue(session, text) {
-  session.thread = await runInteractiveTurn(session.parsed, text, session.thread, session.executeRunner);
+  session.thread = await runInteractiveTurn(session.parsed, text, session.thread, session.executeRunner, { silent: session.silent });
   while (session.queuedMessages.length > 0) {
-    session.thread = await runInteractiveTurn(session.parsed, session.queuedMessages.shift(), session.thread, session.executeRunner);
+    session.thread = await runInteractiveTurn(session.parsed, session.queuedMessages.shift(), session.thread, session.executeRunner, { silent: session.silent });
   }
 }
 
@@ -240,12 +241,12 @@ export function interactiveContinuationThread(threadId) {
   return thread;
 }
 
-export async function runInteractiveTurn(parsed, text, thread, executeRunner = runExecute) {
+export async function runInteractiveTurn(parsed, text, thread, executeRunner = runExecute, options = {}) {
   try {
     return await executeRunner(
       { ...parsed, execute: true, prompt: text, streamJson: false, streamJsonThinking: false, streamJsonInput: false },
       '',
-      { thread },
+      { thread, ...options },
     );
   } catch (error) {
     console.error(`${CLI_NAME}: ${error?.message ?? error}`);

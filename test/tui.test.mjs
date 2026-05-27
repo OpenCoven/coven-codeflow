@@ -205,6 +205,41 @@ test('tui key handling cycles tabs and command palette actions reuse interactive
   assert.match(model.transcript.at(-1).text, /mode: deep/);
 });
 
+test('tui agent turn pulls the assistant reply from the thread and ignores stray stdout writes', async () => {
+  const { createTuiModel, handleTuiKey } = await import(pathToFileURL(path.join(repoRoot, 'src', 'cli', 'tui.mjs')));
+  const model = createTuiModel({ mode: 'smart', reasoningEffort: 'medium' });
+  const session = {
+    parsed: { mode: 'smart', reasoningEffort: 'medium' },
+    queuedMessages: [],
+    silent: true,
+    commandRunner: async () => {},
+    executeRunner: async () => {
+      process.stdout.write('\x1B7\x1B[26;1Hyou:hello\x1B[58;1Hrunning\x1B8');
+      await Promise.resolve();
+      return {
+        id: 'T-test',
+        messages: [
+          { role: 'user', content: 'hello' },
+          { role: 'assistant', content: 'hi from the agent' },
+        ],
+      };
+    },
+    editorReader: async () => '',
+  };
+
+  model.composer = 'hello';
+  model.composerCursor = 'hello'.length;
+  await handleTuiKey(model, session, { name: 'enter' });
+
+  const covenEntries = model.transcript.filter((entry) => entry.role === 'coven');
+  assert.equal(covenEntries.length, 1, 'expected exactly one assistant transcript entry');
+  assert.equal(covenEntries[0].text, 'hi from the agent');
+  assert.ok(
+    !model.transcript.some((entry) => /\x1B|\[26;1H|\[58;1H/.test(entry.text)),
+    'transcript must not contain raw blessed render bytes',
+  );
+});
+
 test('tui scripted smoke processes input and exits without changing execute mode', () => {
   const result = runCovenCode([], {
     input: '/mode deep\n/exit\n',

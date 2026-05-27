@@ -32,11 +32,11 @@ panel TUI.
 ```text
 $ coven-code
 Coven Code 0.0.0-recreate
-chat tools threads config help
+chat lane tools threads config help
 --------------------------------------------------------------------------------
 Ready. Type a prompt or /help.                         | thread: new thread
-                                                        | mode: smart
-                                                        | reasoning: high
+                                                        | lane: unknown
+                                                        | harness: smart
 --------------------------------------------------------------------------------
 >
 ```
@@ -94,7 +94,8 @@ Useful settings and env vars:
 Core:
 
 - `coven-code --help`, `coven-code --version`
-- panel TUI with transcript, tabs, status rail, composer, keyboard shortcuts, and command palette
+- panel TUI with transcript, lane status, tabs, status rail, composer, keyboard shortcuts, and command palette
+- lane view for isolated worktree/branch context, harness selection, terminal output, changed files, diff summary, verification state, and PR/merge/cleanup status
 - compatibility REPL with `/new`, `/continue`, `/queue`, `/mode`, `/reasoning`, persistent history, and multiline prompts
 - command-palette aliases for thread archive, visibility, diagnostics, IDE, skills, plugins, and help
 - one-shot execute mode with `-x` / `--execute`

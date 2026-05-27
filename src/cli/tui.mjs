@@ -1,11 +1,22 @@
 import { runInteractive } from './repl.mjs';
 import { CLI_NAME, VERSION } from '../constants.mjs';
 import { createInteractiveSession, handleInteractiveInput, slashHelpLines } from './interactive-core.mjs';
+import { splitShellWords } from '../util/shell.mjs';
+import {
+  defaultLaneState,
+  inspectLane,
+  nextLaneHarness,
+  normalizeLaneHarness,
+  runLaneVerification,
+} from '../agent/lane.mjs';
 
-const TABS = ['chat', 'tools', 'threads', 'config', 'help'];
+const TABS = ['chat', 'lane', 'tools', 'threads', 'config', 'help'];
 const PALETTE_ACTIONS = [
   ['New thread', '/new'],
   ['Continue latest thread', '/continue'],
+  ['Refresh lane', '/lane refresh'],
+  ['Cycle harness', '/lane harness next'],
+  ['Run verification', '/lane verify'],
   ['Open help', '/help'],
   ['List tools', '/tools list'],
   ['List skills', '/skill: list'],
@@ -45,6 +56,7 @@ export function createTuiModel(options = {}) {
     paletteIndex: 0,
     composer: '',
     transcript: [],
+    lane: defaultLaneState({ harness: options.mode ?? 'smart', ...options.lane }),
     status: 'idle',
   };
 }
@@ -58,6 +70,8 @@ export function renderTuiFrame(model, size = {}) {
   const transcript = renderTranscript(model, Math.max(3, bodyRows - 1), columns - 25);
   const status = [
     `thread: ${model.threadId}`,
+    `lane: ${model.lane.branch}`,
+    `harness: ${model.lane.harness}`,
     `mode: ${model.mode}`,
     `reasoning: ${model.reasoningEffort}`,
     `queued: ${model.queueCount}`,
@@ -127,6 +141,7 @@ export async function handleTuiKey(model, session, key) {
 
 function renderTranscript(model, limit, width) {
   if (model.activeTab === 'help') return slashHelpLines().slice(0, limit).map((line) => line.slice(0, width));
+  if (model.activeTab === 'lane') return renderLaneLines(model, limit, width);
   if (model.activeTab !== 'chat') return [`${model.activeTab} panel`, 'Use slash commands or Ctrl-P palette actions.'];
   const entries = model.transcript.slice(-limit).flatMap((entry) => [
     `${entry.role}:`.slice(0, width),
@@ -152,11 +167,14 @@ async function submitTuiText(model, session, text) {
   if (!text) return;
   model.transcript.push({ role: 'you', text });
   model.status = 'running';
-  const { result, stdout, stderr } = await captureTerminalOutput(() => handleInteractiveInput(session, text));
+  const { result, stdout, stderr } = isLaneCommand(text)
+    ? await handleTuiLaneCommand(model, session, text)
+    : await captureTerminalOutput(() => handleInteractiveInput(session, text));
   model.mode = session.parsed.mode;
   model.reasoningEffort = session.parsed.reasoningEffort ?? model.reasoningEffort;
   model.threadId = session.thread?.id ?? 'new thread';
   model.queueCount = session.queuedMessages.length;
+  rememberLaneTerminal(model, stdout, stderr, result.lines);
   if (stderr.trim()) {
     model.transcript.push({ role: 'error', text: stderr.trim() });
   }
@@ -319,6 +337,7 @@ function renderTabLine(model) {
 
 function renderTranscriptText(model) {
   if (model.activeTab === 'help') return slashHelpLines().join('\n');
+  if (model.activeTab === 'lane') return renderLaneLines(model, 1000, 1000).join('\n');
   if (model.activeTab !== 'chat') return `${model.activeTab} panel\nUse slash commands or Ctrl-P palette actions.`;
   if (model.transcript.length === 0) return 'Ready. Type a prompt or /help.';
   return model.transcript
@@ -329,6 +348,8 @@ function renderTranscriptText(model) {
 function renderStatusText(model) {
   return [
     `thread: ${model.threadId}`,
+    `lane: ${model.lane.branch}`,
+    `harness: ${model.lane.harness}`,
     `mode: ${model.mode}`,
     `reasoning: ${model.reasoningEffort}`,
     `queued: ${model.queueCount}`,
@@ -342,8 +363,100 @@ function renderStatusText(model) {
     'Ctrl-N: new thread',
     'Ctrl-R: reasoning',
     'Ctrl-M: mode',
+    '/lane refresh',
+    '/lane verify',
     'Ctrl-C: quit',
   ].join('\n');
+}
+
+function renderLaneLines(model, limit, width) {
+  const lane = model.lane;
+  const changedFiles = lane.changedFiles.length > 0 ? lane.changedFiles : ['none'];
+  const lines = [
+    `worktree: ${lane.worktree}`,
+    `branch: ${lane.branch}`,
+    `base: ${lane.baseBranch}`,
+    `harness: ${lane.harness}`,
+    `status: ${lane.status}`,
+    `verify: ${lane.verification.status} (${lane.verification.command})`,
+    `PR: ${lane.pullRequest}`,
+    `merge: ${lane.merge}`,
+    `cleanup: ${lane.cleanup}`,
+    '',
+    'Changed files',
+    ...changedFiles.map((file) => `  ${file}`),
+    '',
+    'Diff',
+    lane.diffSummary || '  no diff summary',
+    '',
+    'Terminal',
+    ...(lane.terminalLines.length > 0 ? lane.terminalLines : ['  no lane terminal output yet']),
+  ];
+  return lines.slice(0, limit).map((line) => line.slice(0, width));
+}
+
+function isLaneCommand(text) {
+  return /^\/lane(?:\s|$)/.test(text);
+}
+
+async function handleTuiLaneCommand(model, session, text) {
+  try {
+    const [, subcommand = 'status', ...rest] = splitShellWords(text.slice(1));
+    if (subcommand === 'refresh') {
+      const inspector = session.laneInspector ?? inspectLane;
+      model.lane = await inspector({
+        cwd: process.cwd(),
+        harness: model.lane.harness,
+        verification: model.lane.verification,
+      });
+      model.activeTab = 'lane';
+      return laneCommandResult(`lane refreshed: ${model.lane.branch}`);
+    }
+    if (subcommand === 'harness') {
+      const requested = rest[0] === 'next' ? nextLaneHarness(model.lane.harness) : rest[0];
+      const harness = normalizeLaneHarness(requested);
+      model.lane = { ...model.lane, harness };
+      model.activeTab = 'lane';
+      return laneCommandResult(`harness: ${harness}`);
+    }
+    if (subcommand === 'verify') {
+      const verifier = session.laneVerifier ?? runLaneVerification;
+      model.lane = await verifier(model.lane);
+      model.activeTab = 'lane';
+      return laneCommandResult(`verification: ${model.lane.verification.status}`);
+    }
+    if (subcommand === 'diff') {
+      model.activeTab = 'lane';
+      return laneCommandResult(model.lane.diffSummary || 'no diff summary');
+    }
+    if (subcommand === 'status') {
+      model.activeTab = 'lane';
+      return laneCommandResult(renderLaneLines(model, 40, 120).join('\n'));
+    }
+    return laneCommandResult(`${CLI_NAME}: Unknown lane command: ${subcommand}`, 'error');
+  } catch (error) {
+    return laneCommandResult(`${CLI_NAME}: ${error?.message ?? error}`, 'error');
+  }
+}
+
+function laneCommandResult(text, kind = 'command') {
+  return {
+    result: { kind, lines: [text] },
+    stdout: '',
+    stderr: '',
+  };
+}
+
+function rememberLaneTerminal(model, stdout, stderr, resultLines = []) {
+  const lines = [stdout, stderr, resultLines.join('\n')]
+    .flatMap((text) => String(text ?? '').split(/\r?\n/))
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
+  if (lines.length === 0) return;
+  model.lane = {
+    ...model.lane,
+    terminalLines: [...(model.lane.terminalLines ?? []), ...lines].slice(-40),
+  };
 }
 
 function normalizeBlessedKey(key = {}) {

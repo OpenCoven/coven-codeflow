@@ -178,6 +178,8 @@ export function slashHelpLines() {
     '  /new                  start a fresh thread',
     '  /continue [thread-id] continue the latest active thread or a specific thread',
     '  /queue <prompt>       send a follow-up prompt after the next turn',
+    '  /lane refresh         TUI only: refresh worktree, branch, and diff state',
+    '  /lane verify          TUI only: run the lane verification command',
     '  /editor               compose the next prompt in $EDITOR',
     '  /edit                 edit the previous prompt in $EDITOR',
     '  /ide connect          connect or inspect local IDE integration',

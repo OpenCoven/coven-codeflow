@@ -12,6 +12,21 @@ import {
 
 export const TABS = ['chat', 'lane', 'tools', 'threads', 'config', 'help'];
 
+export const PALETTE_ACTIONS = [
+  ['New thread', '/new'],
+  ['Continue latest thread', '/continue'],
+  ['Refresh lane', '/lane refresh'],
+  ['Cycle harness', '/lane harness next'],
+  ['Run verification', '/lane verify'],
+  ['Open help', '/help'],
+  ['List tools', '/tools list'],
+  ['List skills', '/skill: list'],
+  ['List plugins', '/plugins: list'],
+  ['Open editor', '/editor'],
+  ['Edit previous prompt', '/edit'],
+  ['Archive and quit', '/thread: archive and quit'],
+];
+
 export function renderTabContent(model, limit, width) {
   if (model.activeTab === 'help') return clipLines(formatSlashHelpLines(model.slashCatalog), limit, width);
   if (model.activeTab === 'lane') return renderLaneLines(model, limit, width);

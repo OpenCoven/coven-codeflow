@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { shellQuote } from '../util/shell.mjs';
+import { shellQuote, splitShellWords } from '../util/shell.mjs';
 
 export function filesModifiedByToolCall(event = {}) {
   const input = event.input ?? {};
@@ -28,7 +28,7 @@ function applyPatchModifiedFiles(patch) {
 }
 
 function sedInPlaceModifiedFiles(command) {
-  const tokens = shellWords(command);
+  const tokens = splitShellWords(command);
   if (tokens[0] !== 'sed') return [];
   const files = [];
   let sawInPlace = false;
@@ -53,52 +53,6 @@ function sedInPlaceModifiedFiles(command) {
 
 function looksLikeSedScript(token = '') {
   return /^[a-zA-Z][^/|,;]*[\/|,;]/.test(token);
-}
-
-export function shellWords(command) {
-  const words = [];
-  let current = '';
-  let quote = '';
-  let escaping = false;
-  let tokenStarted = false;
-  for (const char of command) {
-    if (escaping) {
-      current += char;
-      escaping = false;
-      tokenStarted = true;
-      continue;
-    }
-    if (char === '\\' && quote !== "'") {
-      escaping = true;
-      tokenStarted = true;
-      continue;
-    }
-    if (quote) {
-      if (char === quote) quote = '';
-      else {
-        current += char;
-        tokenStarted = true;
-      }
-      continue;
-    }
-    if (char === '"' || char === "'") {
-      quote = char;
-      tokenStarted = true;
-      continue;
-    }
-    if (/\s/.test(char)) {
-      if (tokenStarted) {
-        words.push(current);
-        current = '';
-        tokenStarted = false;
-      }
-      continue;
-    }
-    current += char;
-    tokenStarted = true;
-  }
-  if (tokenStarted) words.push(current);
-  return words;
 }
 
 export function toolCallsInMessages(messages = []) {

@@ -16,14 +16,14 @@ export async function runInstallCommand(args = []) {
     return 0;
   }
   if (command !== 'install') {
-    console.error(`Unknown command: ${command}`);
+    console.error(`coven-code-sdk: Unknown command: ${command}`);
     printUsage();
     return 1;
   }
 
   const parsed = parseInstallOptions(args.slice(1));
   if (parsed.errorMessage) {
-    console.error(parsed.errorMessage);
+    console.error(`coven-code-sdk: ${parsed.errorMessage}`);
     printUsage();
     return 1;
   }

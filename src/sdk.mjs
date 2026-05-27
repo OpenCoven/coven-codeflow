@@ -1,16 +1,20 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
 import { createInterface } from 'node:readline';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { normalizeThreadVisibility, readThread, writeThread } from './threads/store.mjs';
-import { parseJsonc } from './settings/load.mjs';
-
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const covenCodeBin = path.join(repoRoot, 'bin', 'coven-code.mjs');
+import {
+  closeStdin,
+  executeArgs,
+  isAsyncIterable,
+  waitForExit,
+  writeStreamInput,
+} from './sdk-execute.mjs';
+import {
+  prepareRunSettings,
+  resolveCovenCodeCommand,
+  withEnv,
+  writeDebugLog,
+} from './sdk-settings.mjs';
 
 export const threads = {
   async new(options = {}) {
@@ -128,85 +132,9 @@ export function createPermission(tool, action, options = {}) {
   };
 }
 
-function executeArgs(prompt, options, isStreamInput) {
-  const args = ['--execute'];
-  if (!isStreamInput) args.push(String(prompt));
-  args.push(options.thinking ? '--stream-json-thinking' : '--stream-json');
-  if (isStreamInput) args.push('--stream-json-input');
-  if (options.dangerouslyAllowAll) args.push('--dangerously-allow-all');
-  if (options.archive) args.push('--archive');
-  if (options.mode) args.push('--mode', options.mode);
-  if (options.reasoningEffort) args.push('--reasoning-effort', options.reasoningEffort);
-  const visibility = normalizeSdkThreadVisibility(options.visibility) ?? (options.continue ? undefined : 'workspace');
-  if (visibility) args.push('--visibility', visibility);
-  if (options.settingsFile) args.push('--settings-file', options.settingsFile);
-  if (options.continue) args.push('--continue', ...(typeof options.continue === 'string' ? [options.continue] : []));
-  if (options.toolbox) args.push('--toolbox', options.toolbox);
-  if (options.skills) args.push('--skills', options.skills);
-  if (options.mcpConfig) args.push('--mcp-config', typeof options.mcpConfig === 'string' ? options.mcpConfig : JSON.stringify(options.mcpConfig));
-  for (const label of options.labels ?? []) args.push('--label', label);
-  return args;
-}
-
 function normalizeSdkThreadVisibility(visibility) {
   if (visibility === 'team') return 'workspace';
   return normalizeThreadVisibility(visibility);
-}
-
-async function writeStreamInput(child, prompt, signal) {
-  const iterator = prompt[Symbol.asyncIterator]();
-  try {
-    while (true) {
-      const { value: message, done } = await nextWithAbort(iterator, signal);
-      if (done) break;
-      if (child.stdin.destroyed) break;
-      child.stdin.write(`${JSON.stringify(message)}\n`);
-    }
-    child.stdin.end();
-  } catch (error) {
-    if (!isAbortError(error)) throw error;
-    child.stdin.destroy();
-    try {
-      iterator.return?.().catch?.(() => {});
-    } catch {
-      // Best-effort generator cleanup; abort should not wait on a slow prompt source.
-    }
-  }
-}
-
-function nextWithAbort(iterator, signal) {
-  if (!signal) return iterator.next();
-  if (signal.aborted) return Promise.reject(abortReason(signal));
-  return new Promise((resolve, reject) => {
-    const onAbort = () => reject(abortReason(signal));
-    signal.addEventListener('abort', onAbort, { once: true });
-    iterator.next().then(resolve, reject).finally(() => {
-      signal.removeEventListener('abort', onAbort);
-    });
-  });
-}
-
-function abortReason(signal) {
-  return signal.reason instanceof Error ? signal.reason : new Error('aborted');
-}
-
-function isAbortError(error) {
-  return error?.name === 'AbortError' || error?.code === 'ABORT_ERR' || /abort/i.test(error?.message ?? '');
-}
-
-async function closeStdin(child) {
-  child.stdin.end();
-}
-
-function waitForExit(child) {
-  return new Promise((resolve, reject) => {
-    child.on('error', reject);
-    child.on('close', (code) => resolve(code ?? 0));
-  });
-}
-
-function isAsyncIterable(value) {
-  return value && typeof value[Symbol.asyncIterator] === 'function';
 }
 
 function requireSdkThread(threadId) {
@@ -232,83 +160,4 @@ function threadMarkdown(thread) {
 
 function titleCaseRole(role = '') {
   return role ? `${role.slice(0, 1).toUpperCase()}${role.slice(1)}` : 'Message';
-}
-
-async function withEnv(env = {}, fn) {
-  const previous = new Map();
-  for (const [key, value] of Object.entries(env ?? {})) {
-    previous.set(key, Object.hasOwn(process.env, key) ? process.env[key] : undefined);
-    process.env[key] = value;
-  }
-  try {
-    return await fn();
-  } finally {
-    for (const [key, value] of previous) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  }
-}
-
-async function prepareRunSettings(options = {}) {
-  if (!shouldWriteRunSettings(options)) return { settingsFile: options.settingsFile, cleanup: async () => {} };
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'coven-code-sdk-settings-'));
-  const settingsFile = path.join(dir, 'settings.json');
-  const baseSettings = options.settingsFile ? await readJsonSettings(sdkOptionsPath(options.settingsFile, options.cwd)) : {};
-  const settings = { ...baseSettings };
-  if (Array.isArray(options.permissions)) settings['covenCode.permissions'] = options.permissions;
-  if (Array.isArray(options.enabledTools)) settings['covenCode.tools.enable'] = options.enabledTools;
-  if (typeof options.systemPrompt === 'string') settings['covenCode.systemPrompt'] = options.systemPrompt;
-  if (typeof options.skills === 'string') settings['covenCode.skills.path'] = options.skills;
-  await writeFile(settingsFile, `${JSON.stringify(settings, null, 2)}\n`, 'utf8');
-  return {
-    settingsFile,
-    cleanup: async () => {
-      await rm(dir, { recursive: true, force: true });
-    },
-  };
-}
-
-function shouldWriteRunSettings(options = {}) {
-  return Array.isArray(options.permissions)
-    || Array.isArray(options.enabledTools)
-    || typeof options.systemPrompt === 'string'
-    || typeof options.skills === 'string';
-}
-
-async function readJsonSettings(filePath) {
-  try {
-    return parseJsonc(await readFile(filePath, 'utf8'));
-  } catch {
-    return {};
-  }
-}
-
-async function writeDebugLog(options = {}, covenCodeCommand = resolveCovenCodeCommand(), args = []) {
-  if (options.logLevel !== 'debug') return;
-  const line = `level=debug cwd=${options.cwd ?? process.cwd()} argv=${[covenCodeCommand.command, ...covenCodeCommand.args, ...args].map(JSON.stringify).join(' ')}\n`;
-  process.stderr.write(line);
-  if (!options.logFile) return;
-  const logFile = sdkOptionsPath(options.logFile, options.cwd);
-  await mkdir(path.dirname(logFile), { recursive: true });
-  await appendFile(logFile, line, 'utf8');
-}
-
-function sdkOptionsPath(filePath, cwd = process.cwd()) {
-  if (!filePath || path.isAbsolute(filePath)) return filePath;
-  return path.resolve(cwd, filePath);
-}
-
-function resolveCovenCodeCommand() {
-  const cliPath = process.env.COVEN_CODE_CLI_PATH;
-  if (cliPath && existsSync(cliPath)) {
-    return isNodeScriptPath(cliPath)
-      ? { command: process.execPath, args: [cliPath] }
-      : { command: cliPath, args: [] };
-  }
-  return { command: process.execPath, args: [covenCodeBin] };
-}
-
-function isNodeScriptPath(filePath) {
-  return filePath.endsWith('.js') || filePath.endsWith('.mjs') || filePath.endsWith('.cjs');
 }

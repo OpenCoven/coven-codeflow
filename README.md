@@ -23,6 +23,7 @@ The package exposes `coven-code` and `coven-code-sdk` bins.
 - [MCP, skills, and plugins](docs/MCP-SKILLS-PLUGINS.md) - extension points for tools, MCP servers, skills, and project plugins
 - [SDK](docs/SDK.md) - package exports, install helper, execution API, permissions, and thread helpers
 - [Development](docs/DEVELOPMENT.md) - repository layout, local checks, release notes, and safety expectations
+- [Coven Dogfood Protocol](docs/DOGFOOD-PROTOCOL.md) - daily task packets, harness assignment, handoff, verification, retrospectives, and issue capture
 
 ## Interactive Mode
 

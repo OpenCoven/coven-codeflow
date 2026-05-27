@@ -24,7 +24,7 @@ The package exposes `coven-code` and `coven-code-sdk` bins.
 - [SDK](docs/SDK.md) - package exports, install helper, execution API, permissions, and thread helpers
 - [Development](docs/DEVELOPMENT.md) - repository layout, local checks, release notes, and safety expectations
 - [Coven Dogfood Protocol](docs/DOGFOOD-PROTOCOL.md) - daily task packets, harness assignment, handoff, verification, retrospectives, and issue capture
-- [Demo](docs/DEMO.md) - 15-20 minute end-to-end walkthrough of every shipped surface (`bash scripts/demo.sh`)
+- [Demo](docs/DEMO.md) - 15-20 minute end-to-end walkthrough of every shipped surface (`npm run demo`)
 
 ## Interactive Mode
 

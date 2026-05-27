@@ -16,9 +16,9 @@ not wired into `npm test`.
 You are driving this demo for the user. Follow these rules:
 
 1. **Prefer the script over ad-hoc commands.** If the user says "run the
-   demo" with no qualifier, run `bash scripts/demo.sh` once end-to-end
-   and report results. Do not improvise commands that drift from what
-   is documented here.
+   demo" with no qualifier, run `npm run demo` once end-to-end and
+   report results. Do not improvise commands that drift from what is
+   documented here.
 
 2. **Walk the sections in order if asked to narrate.** When the user
    asks for a guided walkthrough, run each section's commands in the
@@ -70,23 +70,24 @@ You are driving this demo for the user. Follow these rules:
 End-to-end (recommended):
 
 ```sh
-bash scripts/demo.sh
+npm run demo
 ```
 
-The script prints each command before running it, prefixed with `$`,
-so the operator can follow along. Output is also captured naturally
-by the terminal.
+This invokes `bash ./scripts/demo.sh`. The script prints each command
+before running it, prefixed with `$`, so the operator can follow along.
+Output is also captured naturally by the terminal. Direct invocation
+(`bash scripts/demo.sh`) works identically if `npm` is unavailable.
 
 To send the run to a log:
 
 ```sh
-bash scripts/demo.sh > /tmp/coven-code-demo.log 2>&1
+npm run demo > /tmp/coven-code-demo.log 2>&1
 ```
 
 To inspect or modify the demo HOME after the run, set it explicitly:
 
 ```sh
-COVEN_DEMO_HOME=/tmp/my-coven-demo bash scripts/demo.sh
+COVEN_DEMO_HOME=/tmp/my-coven-demo npm run demo
 ```
 
 To clean up:
